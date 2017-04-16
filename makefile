@@ -1,17 +1,23 @@
 SRC= \
-	AES.cpp
+	AES.cpp \
+	RunAES.cpp
+
 OBJ= \
-	AES.o
+	AES.o \
+	RunAES.o
+
 DEPS= \
-	RijndaelConstants.h
+	Rijndael.h
+
 CXX=g++
+
 CXX_FLAGS=-std=c++11
 
-%.o: %.c $(DEPS)
-	$(CXX) -c -o $@ $< $(CXX_FLAGS)
+%.o: %.cpp
+	$(CXX) $(CXX_FLAGS) -c -o $@ $< 
 
 AES: $(OBJ)
-	$(CXX) -o $@ $^ $(CXX_FLAGS)
+	$(CXX) $(CXX_FLAGS) -o $@ $^ 
 
 .PHONY: clean
 

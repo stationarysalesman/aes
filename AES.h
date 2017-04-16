@@ -1,5 +1,12 @@
 #include <iostream>
 
+/** Rotate a 32-bit word by one byte, so that the MSB gets moved to the 
+		 *	LSB position. 
+		 *	@param w a reference to the word
+		 */
+inline void RotWord(int &w);
+
+
 /**
  *  A class designed to encapsulate all block cipher functions used in the 
  *  AES-256 algorithm. This implementation operates only in CBC mode. 
@@ -7,11 +14,12 @@
 class AES
 {
   private:
-    char state[4][4];         /*< the state array */
-    char key[32];             /*< the 256-bit key */
-    int Nb;                   /*< the number of words in state */
-    int Nk;                   /*< the number of words in key */
-    int Nr;                   /*< the number of rounds */
+    char state[4][4];         							/*< the state array */
+    char key[32];             							/*< the 256-bit key */
+    unsigned int Nb;                	/*< the number of words in state */
+    unsigned int Nk;                 /*< the number of words in key */
+    unsigned int Nr;                 /*< the number of rounds */
+		unsigned int key_schedule[60];		/*< the expanded key */
 
   public:
 
@@ -40,4 +48,6 @@ class AES
 		 *	@param bytes the string of hex-coded byte values 
 		 */
 		void init_state(std::string bytes);
+
+		
 };
