@@ -48,7 +48,7 @@ class AES
 		 *	@param w the word
 		 *	@return the rotated word
 		 */
-		inline unsigned int RotWord(unsigned int w);
+		unsigned int RotWord(unsigned int w);
 
 		/** Substitute the bytes in a word with bytes from Sbox.
 		 *  @param w the word

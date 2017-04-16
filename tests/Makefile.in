@@ -247,9 +247,8 @@ top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 AM_CXXFLAGS = -Wall -std=c++11
-AM_LDFLAGS = -pthread -lgtest_main -lgtest
-TestAES_SOURCES = TestAES.cpp 
-TestAES_LDADD = ../lib/libaes.a 
+TestAES_SOURCES = TestAES.cpp
+TestAES_LDADD = ../lib/libaes.a -lpthread -lgtest_main -lgtest 
 all: all-am
 
 .SUFFIXES:
@@ -515,7 +514,6 @@ uninstall-am:
 	tags tags-am uninstall uninstall-am
 
 .PRECIOUS: Makefile
-
 
 check: TestAES
 	./TestAES

@@ -61,7 +61,7 @@ unsigned int AES::SubWord(unsigned int w)
 	return (Sbox[c1] << 24) | (Sbox[c2] << 16) | (Sbox[c3] << 8) | Sbox[c4];
 }
 
-inline unsigned int AES::RotWord(unsigned int w)
+unsigned int AES::RotWord(unsigned int w)
 {
 	return (w << 8) | ((w >> 24) & 0xFF);
 }
