@@ -10,6 +10,7 @@ AC_CONFIG_HEADERS([config.h])
 # Checks for programs.
 AC_PROG_CXX
 AC_PROG_CC
+AC_PROG_RANLIB
 
 # Checks for libraries.
 
@@ -20,5 +21,5 @@ AC_C_INLINE
 
 # Checks for library functions.
 
-AC_OUTPUT(Makefile src/Makefile)
+AC_OUTPUT(Makefile src/Makefile lib/Makefile tests/Makefile)
 
