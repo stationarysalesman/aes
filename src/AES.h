@@ -38,6 +38,12 @@ class AES
 		 */
 		void init_key(std::string k);
 
+		/** Obtain a column from the row-major ordered key schedule.
+		 *	@param i the index of the column
+		 *	@return a column from the key schedule packed into a single word
+		 */
+		unsigned int column_from_key_schedule(unsigned int i);
+
 		/** Initialize the state array.
 		 *	@param bytes the string of hex-coded byte values 
 		 */
@@ -56,4 +62,7 @@ class AES
 		 */
 		unsigned int SubWord(unsigned int w);	
 		
+		/* debugging routines */
+		void print_expanded_key();
+		void print_state(std::ostream& o);		
 };
