@@ -70,7 +70,7 @@ TEST(AESFixture, init_state_1)
 TEST(AESFixture, SubBytes_1)
 {
 	AES a = AES();
-	std::string s = "00 44 88 cc \n11 55 99 dd \n22 66 aa ee \n33 77 bb ff \n";
+	std::string s = "63 1b c4 4b \n82 fc ee c1 \n93 33 ac 28 \nc3 f5 ea 16 \n";
 	std::string in = "00112233445566778899AABBCCDDEEFF";
 	a.init_state(in);
 	a.SubBytes();
@@ -79,4 +79,13 @@ TEST(AESFixture, SubBytes_1)
 	ASSERT_EQ(o.str(), s); 
 }
 
-
+TEST(AESFixture, ShiftRows_1)
+{
+	AES a = AES();
+	std::string s = "00 44 88 cc \n55 99 dd 11 \naa ee 22 66 \nff 33 77 bb \n";
+	std::string in = "00112233445566778899AABBCCDDEEFF";
+	a.init_state(in);
+	a.ShiftRows();
+	std::ostringstream o;
+	a.print_state(o);	
+}

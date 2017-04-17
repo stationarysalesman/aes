@@ -120,6 +120,90 @@ void AES::ShiftRows()
 
 }
 
+void AES::MixColumns()
+{
+	for (unsigned int i = 0; i < 4; ++i)
+		MixHelper(i);
+}
+
+void AES::MixHelper(unsigned int c)
+{
+	unsigned char a[4];
+
+  // note that a is just a copy of st[.][c]
+  for (unsigned int i = 0; i < 4; i++)
+      a[i] = state[i][c];
+
+  state[0][c] = (unsigned char)(gmul(0xE,a[0]) ^ gmul(0xB,a[1]) ^ gmul(0xD, a[2]) ^ gmul(0x9,a[3]));
+  state[1][c] = (unsigned char)(gmul(0xE,a[1]) ^ gmul(0xB,a[2]) ^ gmul(0xD, a[3]) ^ gmul(0x9,a[0]));
+  state[2][c] = (unsigned char)(gmul(0xE,a[2]) ^ gmul(0xB,a[3]) ^ gmul(0xD, a[0]) ^ gmul(0x9,a[1]));
+  state[3][c] = (unsigned char)(gmul(0xE,a[3]) ^ gmul(0xB,a[0]) ^ gmul(0xD, a[1]) ^ gmul(0x9,a[2]));
+
+}
+
+unsigned char AES::gmul(unsigned int a, unsigned int b)
+{
+	unsigned int inda = (a < 0) ? (a + 256) : a;
+	unsigned int indb = (b < 0) ? (b + 256) : b;
+
+	if ( (a != 0) && (b != 0) ) 
+	{
+		unsigned int index = (LogTable[inda] + LogTable[indb]);
+		unsigned char val = (unsigned char)(AlogTable[ index % 255 ] );
+		return val;
+	}
+  else 
+      return 0;
+
+}
+
+std::string AES::encrypt_line(std::string line)
+{
+	//TODO: deal with malformed input?
+	
+	if (line.size() < 32)
+		line.append(32 - line.size(), '0');
+	init_state(line);
+	AddRoundKey(0);
+#ifdef DEBUG
+	std::cout << "After addRoundKey(0): " << export_state() << std::endl;
+#endif
+	
+	for (unsigned int round = 1; round < Nr; ++round)
+	{
+		SubBytes();
+#ifdef DEBUG
+		std::cout << "After subBytes: " << export_state() << std::endl;
+#endif
+		ShiftRows();
+#ifdef DEBUG
+		std::cout << "After shiftRows: " << export_state() << std::endl;
+#endif
+		MixColumns();
+#ifdef DEBUG
+		std::cout << "After mixColumns: " << export_state() << std::endl;
+#endif
+		AddRoundKey(round*Nb);
+#ifdef DEBUG
+		std::cout << "After addRoundKey(" << round << "): " << export_state() << std::endl;
+#endif
+	}
+
+	SubBytes();
+#ifdef DEBUG
+	std::cout << "After subBytes: " << export_state() << std::endl;
+#endif
+	ShiftRows();
+#ifdef DEBUG
+	std::cout << "After shiftRows: " << export_state() << std::endl;
+#endif
+	AddRoundKey(Nr*Nb);
+#ifdef DEBUG
+	std::cout << "After addRoundKey(" << Nr << "): " << export_state() << std::endl;
+#endif
+
+	return export_state();	
+}
 void AES::encrypt(std::string keyFileName, std::string plaintextFileName)
 {
 	//TODO: no hardcoded key or plaintext
@@ -127,6 +211,79 @@ void AES::encrypt(std::string keyFileName, std::string plaintextFileName)
 	print_expanded_key();
 	init_state("00112233445566778899AABBCCDDEEFF");
 	return;			
+}
+
+void AES::InvSubBytes()
+{
+	for (unsigned int i = 0; i < 4; ++i)
+		for (unsigned int j = 0; j < 4; ++j)
+			state[i][j] = InvSbox[state[i][j]];
+}
+
+void AES::InvShiftRows()
+{
+	unsigned char *r1 = state[1];
+	unsigned char *r2 = state[2];
+	unsigned char *r3 = state[3];
+
+	/* Rotate the 2nd row (state[1]) by 1 (left) */
+	unsigned char c1 = r3[3];
+	r3[3] = r3[2];
+	r3[2] = r3[1];
+	r3[1] = r3[0];
+	r3[0] = c1;
+
+/* Rotate 3rd row (state[2]) by 2 */
+	c1 = r2[0];
+	unsigned char c2 = r2[1];
+	r2[0] = r2[2];
+	r2[1] = r2[3];
+	r2[2] = c1;
+	r2[3] = c2;
+
+	/* Rotate 4th row (state[3]) by 3 */
+	c1 = r1[0];
+	r1[0] = r1[1];
+	r1[1] = r1[2];
+	r1[2] = r1[3];
+	r1[3] = c1;
+
+}
+
+void AES::InvMixColumns()
+{
+	for (unsigned int i = 0; i < 4; ++i)
+		InvMixHelper(i);
+}
+
+void AES::InvMixHelper(unsigned int c)
+{
+	unsigned char a[4];
+
+  // note that a is just a copy of st[.][c]
+  for (unsigned int i = 0; i < 4; i++)
+      a[i] = state[i][c];
+
+  state[0][c] = (unsigned char)(gmul(0xE,a[0]) ^ gmul(0xB,a[1]) ^ gmul(0xD, a[2]) ^ gmul(0x9,a[3]));
+  state[1][c] = (unsigned char)(gmul(0xE,a[1]) ^ gmul(0xB,a[2]) ^ gmul(0xD, a[3]) ^ gmul(0x9,a[0]));
+  state[2][c] = (unsigned char)(gmul(0xE,a[2]) ^ gmul(0xB,a[3]) ^ gmul(0xD, a[0]) ^ gmul(0x9,a[1]));
+  state[3][c] = (unsigned char)(gmul(0xE,a[3]) ^ gmul(0xB,a[0]) ^ gmul(0xD, a[1]) ^ gmul(0x9,a[2]));
+
+}
+
+
+void AES::AddRoundKey(unsigned int index)
+{
+	unsigned int cols[4];
+	for (unsigned int i = 0, j = index; i < 4; ++i, ++j)
+		cols[i] = column_from_key_schedule(j);
+
+	for (unsigned int j = 0; j < 4; ++j)
+	{
+		unsigned int w = cols[j];
+		for (unsigned int i=0; i < 4; ++i)
+			state[j][i] ^= ((w >> (24 - (i * 8))) & 0xFF);
+	}
 }
 
 void AES::decrypt(std::string keyFileName, std::string ciphertextfileName)
@@ -165,4 +322,13 @@ void AES::print_state(std::ostream& o)
 			o << std::setfill('0') << std::setw(2) << std::hex << (unsigned int)state[i][j] << " ";
 		o << std::endl;	
 	}
+}
+
+std::string AES::export_state()
+{
+	std::ostringstream o;
+	for (unsigned int i = 0; i < 4; ++i)
+		for (unsigned int j = 0; j < 4; ++j)
+			o << std::setfill('0') << std::setw(2) << std::hex << (unsigned int)state[i][j] << " ";
+	return o.str();		
 }
