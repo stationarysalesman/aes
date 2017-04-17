@@ -83,6 +83,43 @@ void AES::init_state(std::string bytes)
 			state[i][j] = b[i+4*j];	
 }
 
+void AES::SubBytes()
+{
+	for (unsigned int i = 0; i < 4; ++i)
+		for (unsigned int j = 0; j < 4; ++j)
+			state[i][j] = Sbox[state[i][j]];
+}
+
+void AES::ShiftRows()
+{
+	unsigned char *r1 = state[1];
+	unsigned char *r2 = state[2];
+	unsigned char *r3 = state[3];
+
+	/* Rotate the 2nd row (state[1]) by 1 */
+	unsigned char c1 = r1[0];
+	r1[0] = r1[1];
+	r1[1] = r1[2];
+	r1[2] = r1[3];
+	r1[3] = c1;
+
+	/* Rotate 3rd row (state[2]) by 2 */
+	c1 = r2[0];
+	unsigned char c2 = r2[1];
+	r2[0] = r2[2];
+	r2[1] = r2[3];
+	r2[2] = c1;
+	r2[3] = c2;
+
+	/* Rotate 4th row (state[3]) by 3 */
+	c1 = r3[3];
+	r3[3] = r3[2];
+	r3[2] = r3[1];
+	r3[1] = r3[0];
+	r3[0] = c1;
+
+}
+
 void AES::encrypt(std::string keyFileName, std::string plaintextFileName)
 {
 	//TODO: no hardcoded key or plaintext

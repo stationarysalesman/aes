@@ -66,3 +66,17 @@ TEST(AESFixture, init_state_1)
 	a.print_state(o);
 	ASSERT_EQ(o.str(), s); 
 }
+
+TEST(AESFixture, SubBytes_1)
+{
+	AES a = AES();
+	std::string s = "00 44 88 cc \n11 55 99 dd \n22 66 aa ee \n33 77 bb ff \n";
+	std::string in = "00112233445566778899AABBCCDDEEFF";
+	a.init_state(in);
+	a.SubBytes();
+	std::ostringstream o;
+	a.print_state(o);
+	ASSERT_EQ(o.str(), s); 
+}
+
+

@@ -48,7 +48,29 @@ class AES
 		 *	@param bytes the string of hex-coded byte values 
 		 */
 		void init_state(std::string bytes);
+
+		/** Substitute bytes in the state with bytes in the Rijndael S-box.
+		 */
+		void SubBytes();
+
+		/** Shift the rows of the state. */
+		void ShiftRows();
+
+		/** XOR columns of the state with columns from the key schedule. */
+		void MixColumns();
+
+		/** XOR the round key with the state. */
+		void AddRoundKey(unsigned int i);	
+
+		/** Inverse operation with respect to SubBytes. */
+		void InvSubBytes();
 		
+		/** Inverse operation with respect to ShiftRows. */
+		void InvShiftRows();
+			
+		/** Inverse operation with respect to MixColumns. */
+		void InvMixColumns();
+			
 		/** Rotate a 32-bit word by one byte, so that the MSB gets moved to the 
 		 *	LSB position. 
 		 *	@param w the word
