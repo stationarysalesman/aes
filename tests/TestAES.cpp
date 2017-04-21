@@ -59,19 +59,18 @@ TEST(AESFixture, SubWord_3)
 TEST(AESFixture, init_state_1)
 {
 	AES a = AES();
-	std::string s = "004488cc115599dd2266aaee3377bbff\n";
-	std::string in = "00112233445566778899AABBCCDDEEFF";
+	std::string in = "00112233445566778899aabbccddeeff";
 	a.init_state(in);
 	std::ostringstream o;
 	a.print_state(o);
-	ASSERT_EQ(o.str(), s); 
+	ASSERT_EQ(o.str(), in+"\n"); 
 }
 
 TEST(AESFixture, SubBytes_1)
 {
 	AES a = AES();
-	std::string s = "631bc44b82fceec19333ac28c3f5ea16\n";
-	std::string in = "00112233445566778899AABBCCDDEEFF";
+	std::string s = "638293c31bfc33f5c4eeacea4bc12816\n"; 
+	std::string in = "00112233445566778899aabbccddeeff";
 	a.init_state(in);
 	a.SubBytes();
 	std::ostringstream o;
@@ -82,8 +81,8 @@ TEST(AESFixture, SubBytes_1)
 TEST(AESFixture, ShiftRows_1)
 {
 	AES a = AES();
-	std::string s = "004488cc5599dd11aaee2266ff3377bb\n";
-	std::string in = "00112233445566778899AABBCCDDEEFF";
+	std::string s = "0055aaff4499ee3388dd2277cc1166bb\n"; 
+	std::string in = "00112233445566778899aabbccddeeff";
 	a.init_state(in);
 	a.ShiftRows();
 	std::ostringstream o;
@@ -94,9 +93,32 @@ TEST(AESFixture, ShiftRows_1)
 TEST(AESFixture, MixColumns_1)
 {
 	AES a = AES();
-	std::string in = "6036b4f1f37626913a18d69bcc4dbe18";
-//	std::string in = "60f33acc3676184db426d6bef1919b18";
-	std::string ans = "dfd011f23ae4f0972d6123cedb67ad8c\n";	
+	std::string in = "63fcac161bee28c3c4c193f54b8233ea";
+	std::string ans = "6379e6d9f467fb76ad063cf4d2eb8aa3\n";	
+	a.init_state(in);
+	a.MixColumns();
+	std::ostringstream o;
+	a.print_state(o);
+	ASSERT_EQ(o.str(), ans);
+}
+
+TEST(AESFixture, MixColumns_2)
+{
+	AES a = AES();
+	std::string in = "e5c243c238f9120705783b1b9e46278f";
+	std::string ans = "0d7dfc2a75e0ecada2a3267a45f41cdd\n";	
+	a.init_state(in);
+	a.MixColumns();
+	std::ostringstream o;
+	a.print_state(o);
+	ASSERT_EQ(o.str(), ans);
+}
+
+TEST(AESFixture, MixColumns_3)
+{
+	AES a = AES();
+	std::string in = "713aabf2f7f04b46f13f759c9ce19a54";
+	std::string ans = "f5110bfdf3975b35518c9b61d5a4ae6c\n";	
 	a.init_state(in);
 	a.MixColumns();
 	std::ostringstream o;

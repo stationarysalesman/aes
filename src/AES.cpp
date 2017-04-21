@@ -319,7 +319,7 @@ void AES::print_state(std::ostream& o)
 {
 	for (unsigned int i = 0; i < 4; ++i)
 		for (unsigned int j = 0; j < 4; ++j)
-			o << std::setfill('0') << std::setw(2) << std::hex << (unsigned int)state[i][j];
+			o << std::setfill('0') << std::setw(2) << std::hex << (unsigned int)state[j][i];
 	
 	o << std::endl;	
 }
