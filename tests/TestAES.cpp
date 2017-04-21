@@ -59,7 +59,7 @@ TEST(AESFixture, SubWord_3)
 TEST(AESFixture, init_state_1)
 {
 	AES a = AES();
-	std::string s = "00 44 88 cc \n11 55 99 dd \n22 66 aa ee \n33 77 bb ff \n";
+	std::string s = "004488cc115599dd2266aaee3377bbff\n";
 	std::string in = "00112233445566778899AABBCCDDEEFF";
 	a.init_state(in);
 	std::ostringstream o;
@@ -70,7 +70,7 @@ TEST(AESFixture, init_state_1)
 TEST(AESFixture, SubBytes_1)
 {
 	AES a = AES();
-	std::string s = "63 1b c4 4b \n82 fc ee c1 \n93 33 ac 28 \nc3 f5 ea 16 \n";
+	std::string s = "631bc44b82fceec19333ac28c3f5ea16\n";
 	std::string in = "00112233445566778899AABBCCDDEEFF";
 	a.init_state(in);
 	a.SubBytes();
@@ -82,10 +82,24 @@ TEST(AESFixture, SubBytes_1)
 TEST(AESFixture, ShiftRows_1)
 {
 	AES a = AES();
-	std::string s = "00 44 88 cc \n55 99 dd 11 \naa ee 22 66 \nff 33 77 bb \n";
+	std::string s = "004488cc5599dd11aaee2266ff3377bb\n";
 	std::string in = "00112233445566778899AABBCCDDEEFF";
 	a.init_state(in);
 	a.ShiftRows();
 	std::ostringstream o;
 	a.print_state(o);	
+	ASSERT_EQ(o.str(), s);
+}
+
+TEST(AESFixture, MixColumns_1)
+{
+	AES a = AES();
+	std::string in = "6036b4f1f37626913a18d69bcc4dbe18";
+//	std::string in = "60f33acc3676184db426d6bef1919b18";
+	std::string ans = "dfd011f23ae4f0972d6123cedb67ad8c\n";	
+	a.init_state(in);
+	a.MixColumns();
+	std::ostringstream o;
+	a.print_state(o);
+	ASSERT_EQ(o.str(), ans);
 }

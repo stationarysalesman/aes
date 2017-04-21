@@ -117,7 +117,7 @@ class AES
 		 *	@param b the second number
 		 * 	@return the multiplication of the numbers
 		 */
-		unsigned char gmul(unsigned int a, unsigned int b);
+		unsigned char gmul(int a, int b);
 
 
 };
