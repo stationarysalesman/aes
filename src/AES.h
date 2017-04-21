@@ -2,7 +2,7 @@
 #include <sstream>
 
 /** The debugging flag. Uncomment to print debugging messages. */
-#define DEBUG 1
+//#define DEBUG 1
 
 /**
  *  A class designed to encapsulate all block cipher functions used in the 
@@ -42,6 +42,12 @@ class AES
 		 */
 		void decrypt(std::string keyFileName, std::string plaintextFileName);
 
+		/** Decrypt a line of hex characters.
+		 *	@param line the line of hex characters to decrypt
+		 *	@return a line of decrypted hex characters
+		 */
+		std::string decrypt_line(std::string line);
+	
 		/** Initialize the key schedule based on the provided 256-bit key.
 		 * 	@param k the string of hex-coded byte values of the key
 		 */

@@ -429,8 +429,6 @@ distclean-generic:
 maintainer-clean-generic:
 	@echo "This command is intended for maintainers to use"
 	@echo "it deletes files that may require special tools to rebuild."
-clean: clean-am
-
 clean-am: clean-checkPROGRAMS clean-generic mostlyclean-am
 
 distclean: distclean-am
@@ -515,8 +513,16 @@ uninstall-am:
 
 .PRECIOUS: Makefile
 
-check: TestAES
+check: TestAES ../src/AES
 	./TestAES
+
+	python AEStestvectors.py > in.tmp
+	../src/AES e Acceptance1key.txt in.tmp
+	../src/AES d Acceptance1key.txt in.tmp.enc
+	diff -i in.tmp.enc.dec in.tmp
+
+clean:
+	rm -rf *tmp* *.o TestAES Makefile
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.

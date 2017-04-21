@@ -261,7 +261,7 @@ target_alias = @target_alias@
 top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
-AM_CXXFLAGS = -Wall -std=c++11 -O4
+AM_CXXFLAGS = -Wall -std=c++11
 AES_SOURCES = RunAES.cpp AES.cpp AES.h Rijndael.h
 all: all-am
 

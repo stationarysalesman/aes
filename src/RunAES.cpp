@@ -5,6 +5,7 @@
 
 int main(int argc, char *argv[])
 {
+	std::string e = "e", d = "d";
 	if (argc != 4)
 	{
 		std::cout << "Error: " << argc-1 << " arguments given (need 3)" << std::endl;
@@ -12,7 +13,7 @@ int main(int argc, char *argv[])
 	}
 
 	std::string keyFile = argv[2], textFile = argv[3];
-	std::string e = "e", d = "d";
+
 	AES cipher = AES();
 
 	/* Encrypt a file */	

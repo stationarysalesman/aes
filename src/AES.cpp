@@ -2,6 +2,7 @@
 #include "src/Rijndael.h"
 #include <string>
 #include <iomanip>
+#include <fstream>
 
 /** 
  * Initialize the parameters of AES-256.
@@ -163,8 +164,11 @@ std::string AES::encrypt_line(std::string line)
 	
 	if (line.size() < 32)
 		line.append(32 - line.size(), '0');
+
+	/* Encryption prologue */
 	init_state(line);
 	AddRoundKey(0);
+
 #ifdef DEBUG
 	std::cout << "After addRoundKey(0): " << std::endl << export_state() << std::endl;
 #endif
@@ -204,15 +208,92 @@ std::string AES::encrypt_line(std::string line)
 
 	return export_state();	
 }
+
+std::string AES::decrypt_line(std::string line)
+{
+	/* Decryption prologue */
+	init_state(line);
+	AddRoundKey(Nr*Nb);
+#ifdef DEBUG	
+	std::cout << "After addRoundKey(" << Nr << "): " << std::endl<< export_state() << std::endl;
+#endif
+
+	for (unsigned int round = Nr-1; round > 0; --round)
+	{
+		InvShiftRows();
+#ifdef DEBUG
+	std::cout << "After invShiftRows: " << std::endl<< export_state() << std::endl;
+#endif
+		InvSubBytes();
+#ifdef DEBUG
+	std::cout << "After invSubBytes: " << std::endl<< export_state() << std::endl;
+#endif
+		AddRoundKey(round*Nb);
+#ifdef DEBUG
+	std::cout << "After addRoundKey(" << round << "): " << std::endl<< export_state() << std::endl;
+#endif
+		InvMixColumns();
+#ifdef DEBUG
+	std::cout << "After invMixColumns: " << std::endl<< export_state() << std::endl;
+#endif
+	}
+	
+	InvShiftRows();
+#ifdef DEBUG
+	std::cout << "After invShiftRows: " << std::endl<< export_state() << std::endl;
+#endif
+		InvSubBytes();
+#ifdef DEBUG
+	std::cout << "After invSubBytes: " << std::endl<< export_state() << std::endl;
+#endif
+		AddRoundKey(0);
+#ifdef DEBUG
+	std::cout << "After addRoundKey(0): " << std::endl<< export_state() << std::endl;
+#endif
+
+	return export_state();
+
+}
 void AES::encrypt(std::string keyFileName, std::string plaintextFileName)
 {
-	//TODO: no hardcoded key or plaintext
-	init_key("00000000000000000000000000000000");
-	print_expanded_key();
-	encrypt_line("00112233445566778899AABBCCDDEEFF");
-		
+	std::ifstream k;
+	std::ifstream pt;
+	std::ofstream ct;	
+	k.open(keyFileName);
+	pt.open(plaintextFileName);	
+	ct.open(plaintextFileName + ".enc");
+	std::string s;
+	k >> s;
+	init_key(s);
+	pt >> s;
+	while (pt.good())
+	{
+		ct << encrypt_line(s) << std::endl;
+		pt >> s;
+	}
 	return;			
 }
+
+void AES::decrypt(std::string keyFileName, std::string ciphertextFileName)
+{
+	std::ifstream k;
+	std::ifstream ct;	
+	std::ofstream pt;
+	k.open(keyFileName);
+	ct.open(ciphertextFileName);	
+	pt.open(ciphertextFileName + ".dec");
+	std::string s;
+	k >> s;
+	init_key(s);
+	ct >> s;
+	while (ct.good())
+	{
+		pt << decrypt_line(s) << std::endl;
+		ct >> s;	
+	}
+	return;			
+}
+
 
 void AES::InvSubBytes()
 {
@@ -286,11 +367,6 @@ void AES::AddRoundKey(unsigned int index)
 			state[j][i] ^= ((w >> (24 - (i * 8))) & 0xFF);
 	}
 }
-
-void AES::decrypt(std::string keyFileName, std::string ciphertextfileName)
-{
-
-}	
 
 
 /***** Utilities *****/
