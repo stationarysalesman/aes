@@ -228,11 +228,11 @@ void AES::InvShiftRows()
 	unsigned char *r3 = state[3];
 
 	/* Rotate the 2nd row (state[1]) by 1 (left) */
-	unsigned char c1 = r3[3];
-	r3[3] = r3[2];
-	r3[2] = r3[1];
-	r3[1] = r3[0];
-	r3[0] = c1;
+	unsigned char c1 = r1[3];
+	r1[3] = r1[2];
+	r1[2] = r1[1];
+	r1[1] = r1[0];
+	r1[0] = c1;
 
 /* Rotate 3rd row (state[2]) by 2 */
 	c1 = r2[0];
@@ -243,11 +243,11 @@ void AES::InvShiftRows()
 	r2[3] = c2;
 
 	/* Rotate 4th row (state[3]) by 3 */
-	c1 = r1[0];
-	r1[0] = r1[1];
-	r1[1] = r1[2];
-	r1[2] = r1[3];
-	r1[3] = c1;
+	c1 = r3[0];
+	r3[0] = r3[1];
+	r3[1] = r3[2];
+	r3[2] = r3[3];
+	r3[3] = c1;
 
 }
 

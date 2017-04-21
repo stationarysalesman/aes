@@ -125,3 +125,66 @@ TEST(AESFixture, MixColumns_3)
 	a.print_state(o);
 	ASSERT_EQ(o.str(), ans);
 }
+
+/* Decryption tests */
+
+TEST(AESFixture, InvShiftRows_1)
+{
+	AES a = AES();
+	std::string in = "0cfe055bcdc1da4a8f5f63caafb03f9d";
+	std::string ans = "0cb0634acdfe3fca8fc1059daf5fda5b\n";	
+	a.init_state(in);
+	a.InvShiftRows();
+	std::ostringstream o;
+	a.print_state(o);
+	ASSERT_EQ(o.str(), ans);
+}
+
+TEST(AESFixture, InvSubBytes_1)
+{
+	AES a = AES();
+	std::string in = "604dd691f336be9b3a76b418cc1826f1";
+	std::string ans = "90654aac7e245ae8a20fc6342734232b\n";
+	a.init_state(in);
+	a.InvSubBytes();
+	std::ostringstream o;
+	a.print_state(o);
+	ASSERT_EQ(o.str(), ans);
+}
+
+TEST(AESFixture, InvMixColumns_1)
+{
+	AES a = AES();
+	std::string in = "df3a2ddbd0e4616711f023adf297ce8c";
+	std::string ans = "6036b4f1f37626913a18d69bcc4dbe18\n";	
+	a.init_state(in);
+	a.InvMixColumns();
+	std::ostringstream o;
+	a.print_state(o);
+	ASSERT_EQ(o.str(), ans);
+}
+
+TEST(AESFixture, InvMixColumns_2)
+{
+	AES a = AES();
+	std::string in = "929BC8F9BB384084DAB3353F60142964";
+	std::string ans = "104d3a5f2e475b75cff4e6be5d5f665d\n";	
+	a.init_state(in);
+	a.InvMixColumns();
+	std::ostringstream o;
+	a.print_state(o);
+	ASSERT_EQ(o.str(), ans);
+}
+
+TEST(AESFixture, InvMixColumns_3)
+{
+	AES a = AES();
+	std::string in = "6379E6D9F467FB76AD063CF4D2EB8AA3";
+	std::string ans = "63fcac161bee28c3c4c193f54b8233ea\n";	
+	a.init_state(in);
+	a.InvMixColumns();
+	std::ostringstream o;
+	a.print_state(o);
+	ASSERT_EQ(o.str(), ans);
+}
+
