@@ -347,7 +347,6 @@ void AES::decrypt(std::string keyFileName, std::string ciphertextFileName, std::
 	dec.clear();
 	dec.seekg(0, dec.end);
 	int len = dec.tellg();
-	std::cerr << "len: " << len << std::endl;
 	dec.clear();
 	dec.seekg(0, dec.beg);
 
