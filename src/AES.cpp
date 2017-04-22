@@ -250,6 +250,7 @@ void AES::encrypt(std::string keyFileName, std::string plaintextFileName)
 	std::ifstream k;
 	std::ifstream pt;
 	std::ofstream ct;	
+	std::string t;	
 	k.open(keyFileName);
 	pt.open(plaintextFileName);	
 	ct.open(plaintextFileName + ".enc");
@@ -263,7 +264,7 @@ void AES::encrypt(std::string keyFileName, std::string plaintextFileName)
 		std::cerr << "(e) plaintext: " << s << std::endl;
 #endif
 		init_state(s);		
-		std::string t = encrypt_line();
+		t = encrypt_line();
 #ifdef DB_2
 		std::cerr << "(e) ciphertext: " << t << std::endl;
 #endif
@@ -273,16 +274,20 @@ void AES::encrypt(std::string keyFileName, std::string plaintextFileName)
 		s = get_line(pt);
 	}
 
-	/* We added padding, so we need to append the number of padded bytes 
-		so we can stip off the padding during decryption */
-/*
-	if (padded_bytes > 0)
-	{
-		zero_state();
-		state[0][0] = padded_bytes;
-			
-	}
-*/	
+	/* Append the number of padded bytes so we can stip off any padding during decryption */
+
+	zero_state();
+	state[0][0] = padded_bytes;
+#ifdef DB_2
+	std::cerr << "padding: " << export_state() << std::endl;
+#endif
+	t = encrypt_line();
+#ifdef DB_2
+	std::cerr << "(e) ciphertext: " << t << std::endl;
+#endif
+	for (unsigned int i = 0; i < 32; i+=2)
+		ct << (unsigned char)std::stoi(t.substr(i, 2), nullptr, 16);
+	
 	return;			
 }
 
@@ -290,10 +295,12 @@ void AES::decrypt(std::string keyFileName, std::string ciphertextFileName)
 {
 	std::ifstream k;
 	std::ifstream ct;	
-	std::ofstream pt;
+	std::fstream pt;	/* need RW to deal with padding */
+	unsigned char c;	
 	k.open(keyFileName);
 	ct.open(ciphertextFileName);	
-	pt.open(ciphertextFileName + ".dec");
+	pt.open(ciphertextFileName + ".dec", std::fstream::out);
+//	pt.open(ciphertextFileName + ".dec");
 	std::string s;
 	k >> s;
 	init_key(s);
@@ -310,12 +317,45 @@ void AES::decrypt(std::string keyFileName, std::string ciphertextFileName)
 #endif
 		for (unsigned int i = 0; i < 32; i+=2)
 		{
-			unsigned char c = (unsigned char)std::stoi(t.substr(i, 2), nullptr, 16);
-			/*if (c || (!c && !PADDED))*/ pt << c; 	
+			c = (unsigned char)std::stoi(t.substr(i, 2), nullptr, 16);
+			pt << c; 	
 		}
-//	pt << decrypt_line(s) << std::endl;
 		s = get_line(ct);
 	}
+
+	/* Need to determine if any padding was added */
+	pt.close();
+	std::ifstream dec;
+	dec.open(ciphertextFileName + ".dec");
+	dec.seekg(-16, dec.end);
+	s = get_line(dec);
+	unsigned int num_bytes = std::stoi(s.substr(0, 2), nullptr, 16);
+	
+	/* Get total length of file */
+	dec.clear();
+	dec.seekg(0, dec.end);
+	int len = dec.tellg();
+//	dec.close();
+//	dec.open(ciphertextFileName + ".dec");
+	dec.clear();
+	dec.seekg(0, dec.beg);
+
+	/* Copy the decrypted file without the padding */
+	std::ofstream dec_tmp;
+	dec_tmp.open("decrypt.tmp");
+	c = dec.get();
+	for (unsigned int i = 0; i < len - 16 - num_bytes; ++i)
+	{
+		dec_tmp.put(c);
+		c = dec.get();
+	}
+	
+	/* Delete the old decrypted file with padding and rename temp file */
+	int i;
+	std::string cmd = "rm " + ciphertextFileName + ".dec";
+	i = system(cmd.c_str());
+	cmd = "mv decrypt.tmp " + ciphertextFileName + ".dec";
+	i = system(cmd.c_str()); //TODO: change pls		
 	return;			
 }
 
