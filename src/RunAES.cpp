@@ -1,29 +1,51 @@
 #include "AES.h"
 #include <iostream>
+#include <unistd.h>
 
 /** Main program driver. */
 
 int main(int argc, char *argv[])
 {
-	std::string e = "e", d = "d";
-	if (argc != 4)
-	{
-		std::cout << "Error: " << argc-1 << " arguments given (need 3)" << std::endl;
-		return 1;
-	}
+	std::string keyFile, textFile, output_filename;
+	bool encrypt = false;	
+	bool decrypt = false;	
 
-	std::string keyFile = argv[2], textFile = argv[3];
+	int opt;
+	while ((opt = getopt(argc, argv, "o:edk:i:")) != -1)
+	{
+		switch (opt)
+		{
+			case 'o':
+				output_filename = optarg;
+				break;
+			case 'e':							
+				encrypt = true;
+				break;
+			case 'd':
+				decrypt = true;
+				break;
+			case 'k':
+				keyFile = optarg;
+				break;
+			case 'i':
+				textFile = optarg;
+				break;
+			default:
+				std::cerr << "Argument error" << std::endl;
+				exit(1);
+		}
+	}
 
 	AES cipher = AES();
 
 	/* Encrypt a file */	
-	if (e.compare(argv[1]) == 0)
-		cipher.encrypt(keyFile, textFile);
-	else if (d.compare(argv[1]) == 0)
-		cipher.decrypt(keyFile, textFile);
+	if (encrypt && !decrypt)
+		cipher.encrypt(keyFile, textFile, output_filename);
+	else if (decrypt && !encrypt)
+		cipher.decrypt(keyFile, textFile, output_filename);
 	else
 	{
-		std::cout << "Error: invalid option '" << argv[1] << "'" << std::endl;
+		std::cout << "Please select either encryption or decryption." << std::endl;
 		return 1;
 	}	
 	return 0;	

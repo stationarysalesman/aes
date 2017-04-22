@@ -27,11 +27,14 @@ class AES
 		 */
 		AES();
 
-		/** Encrypt a plaintext file. 
+		/** Encrypt a plaintext file. Can optionally provide an output file 
+		 *	for testing, etc. 
 		 *  @param keyFileName file name of the file containing the key
 		 *  @param plaintextFileName file name of the plaintext file
+		 *	@param outputFileName file name of output file
 		 */ 
-    void encrypt(std::string keyFileName, std::string plaintextFileName);
+    void encrypt(std::string keyFileName, std::string plaintextFileName, 
+									std::string outFileName = "");
 
 		/** Grab a 8 bytes of input from the input file. Pads the input 
 		 *	if necessary with zeroes. 
@@ -46,11 +49,13 @@ class AES
 		 */
 		std::string encrypt_line();
 	
-		/** Decrypt a ciphertext.
+		/** Decrypt a ciphertext. Can optionally provide an output file 
+		 * 	for testing, etc.
 		 *  @param keyFileName file name of the file containing the key
 		 *  @param plaintextFileName file name of the ciphertext file
 		 */
-		void decrypt(std::string keyFileName, std::string plaintextFileName);
+		void decrypt(std::string keyFileName, std::string plaintextFileName, 
+									std::string outFileName = "");
 
 		/** Decrypt a line of hex characters.
 		 *	@pre a line of ciphertext has been loaded into the state array

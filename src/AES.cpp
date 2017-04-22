@@ -245,15 +245,16 @@ std::string AES::decrypt_line()
 	return export_state();
 
 }
-void AES::encrypt(std::string keyFileName, std::string plaintextFileName)
+void AES::encrypt(std::string keyFileName, std::string plaintextFileName, std::string outFileName)
 {
 	std::ifstream k;
 	std::ifstream pt;
 	std::ofstream ct;	
+	std::string outputName = (outFileName.compare("") == 0) ? plaintextFileName + ".tmp" : outFileName;
 	std::string t;	
 	k.open(keyFileName);
 	pt.open(plaintextFileName);	
-	ct.open(plaintextFileName + ".enc");
+	ct.open(outputName);
 	std::string s;
 	k >> s;
 	init_key(s);
@@ -287,20 +288,31 @@ void AES::encrypt(std::string keyFileName, std::string plaintextFileName)
 #endif
 	for (unsigned int i = 0; i < 32; i+=2)
 		ct << (unsigned char)std::stoi(t.substr(i, 2), nullptr, 16);
-	
-	return;			
+
+	/* If encrypting in place, remove the original, and rename the temporary file */
+	if (outFileName.compare("") == 0)
+	{
+		int i;
+		std::string cmd = "rm " + plaintextFileName;
+		i = system(cmd.c_str());
+		if (i) std::cerr << "Error: cmd '" << cmd << "' returned " << i << std::endl;	
+		cmd = "mv " + plaintextFileName + ".tmp " + plaintextFileName; 
+		i = system(cmd.c_str());
+		if (i) std::cerr << "Error: cmd '" << cmd << "' returned " << i << std::endl;	
+	}	
+	return;
 }
 
-void AES::decrypt(std::string keyFileName, std::string ciphertextFileName)
+void AES::decrypt(std::string keyFileName, std::string ciphertextFileName, std::string outFileName)
 {
 	std::ifstream k;
 	std::ifstream ct;	
 	std::fstream pt;	/* need RW to deal with padding */
+	std::string outputName = (outFileName.compare("") == 0 ? ciphertextFileName + ".tmp" : outFileName);
 	unsigned char c;	
 	k.open(keyFileName);
-	ct.open(ciphertextFileName);	
-	pt.open(ciphertextFileName + ".dec", std::fstream::out);
-//	pt.open(ciphertextFileName + ".dec");
+	ct.open(ciphertextFileName);
+	pt.open("decrypt.tmp", std::fstream::out); /* placeholder */
 	std::string s;
 	k >> s;
 	init_key(s);
@@ -326,7 +338,7 @@ void AES::decrypt(std::string keyFileName, std::string ciphertextFileName)
 	/* Need to determine if any padding was added */
 	pt.close();
 	std::ifstream dec;
-	dec.open(ciphertextFileName + ".dec");
+	dec.open("decrypt.tmp", std::fstream::in);
 	dec.seekg(-16, dec.end);
 	s = get_line(dec);
 	unsigned int num_bytes = std::stoi(s.substr(0, 2), nullptr, 16);
@@ -335,14 +347,13 @@ void AES::decrypt(std::string keyFileName, std::string ciphertextFileName)
 	dec.clear();
 	dec.seekg(0, dec.end);
 	int len = dec.tellg();
-//	dec.close();
-//	dec.open(ciphertextFileName + ".dec");
+	std::cerr << "len: " << len << std::endl;
 	dec.clear();
 	dec.seekg(0, dec.beg);
 
 	/* Copy the decrypted file without the padding */
 	std::ofstream dec_tmp;
-	dec_tmp.open("decrypt.tmp");
+	dec_tmp.open(outputName);
 	c = dec.get();
 	for (unsigned int i = 0; i < len - 16 - num_bytes; ++i)
 	{
@@ -350,12 +361,24 @@ void AES::decrypt(std::string keyFileName, std::string ciphertextFileName)
 		c = dec.get();
 	}
 	
-	/* Delete the old decrypted file with padding and rename temp file */
 	int i;
-	std::string cmd = "rm " + ciphertextFileName + ".dec";
+	std::string cmd; 
+	/* If we are decrypting in place, remove the original and rename the tmp file */	
+	if (outFileName.compare("") == 0)
+	{	
+		cmd = "rm " + ciphertextFileName;
+		i = system(cmd.c_str());
+		if (i) std::cerr << "Error: cmd '" << cmd << "' returned " << i << std::endl;	
+		cmd = "mv " + outputName + " " + ciphertextFileName; 
+		i = system(cmd.c_str()); //TODO: change pls		
+		if (i) std::cerr << "Error: cmd '" << cmd << "' returned " << i << std::endl;	
+	}
+
+	/* remove original tmp file */
+	cmd = "rm decrypt.tmp";
 	i = system(cmd.c_str());
-	cmd = "mv decrypt.tmp " + ciphertextFileName + ".dec";
-	i = system(cmd.c_str()); //TODO: change pls		
+	if (i) std::cerr << "Error: cmd '" << cmd << "' returned " << i << std::endl;	
+		
 	return;			
 }
 
