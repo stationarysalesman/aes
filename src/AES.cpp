@@ -265,11 +265,21 @@ void AES::encrypt(std::string keyFileName, std::string plaintextFileName)
 	std::string s;
 	k >> s;
 	init_key(s);
-	pt >> s;
-	while (pt.good())
+	s = get_line(pt);
+	while (s != "")
 	{
-		ct << encrypt_line(s) << std::endl;
-		pt >> s;
+#ifdef DEBUG
+		std::cerr << "(e) plaintext: " << s << std::endl;
+#endif
+		std::string t = encrypt_line(s);
+#ifdef DEBUG
+		std::cerr << "(e) ciphertext: " << t << std::endl;
+#endif
+		for (unsigned int i = 0; i < 32; i+=2)
+			ct << (unsigned char)std::stoi(t.substr(i, 2), nullptr, 16);
+
+//		ct << encrypt_line(s) << std::endl;
+		s = get_line(pt);
 	}
 	return;			
 }
@@ -285,11 +295,23 @@ void AES::decrypt(std::string keyFileName, std::string ciphertextFileName)
 	std::string s;
 	k >> s;
 	init_key(s);
-	ct >> s;
-	while (ct.good())
+	s = get_line(ct);
+	while (s != "")
 	{
-		pt << decrypt_line(s) << std::endl;
-		ct >> s;	
+#ifdef DEBUG
+		std::cerr << "(d) ciphertext: " << s << std::endl;
+#endif
+		std::string t = decrypt_line(s);
+#ifdef DEBUG
+		std::cerr << "(d) plaintext: " << t << std::endl;
+#endif
+		for (unsigned int i = 0; i < 32; i+=2)
+		{
+			unsigned char c = (unsigned char)std::stoi(t.substr(i, 2), nullptr, 16);
+			if (c) pt << c; 	
+		}
+//	pt << decrypt_line(s) << std::endl;
+		s = get_line(ct);
 	}
 	return;			
 }
@@ -408,3 +430,33 @@ std::string AES::export_state()
 			o << std::setfill('0') << std::setw(2) << std::hex << (unsigned int)state[j][i];
 	return o.str();		
 }
+
+std::string AES::get_line(std::ifstream& file)
+{
+	if (file.eof()) return "";
+
+	std::stringstream s;
+	unsigned char c;
+	c = file.get();
+//	s << std::hex << ((c & 0xF0) >> 4) << (c & 0xF);
+	for (unsigned int i = 0; i < 16; ++i)
+	{
+		s << std::hex << ((c & 0xF0) >> 4) << (c & 0xF);
+		c = file.get();	
+		if (file.eof())
+		{
+			for (unsigned int j = i+1; j < 16; ++j)
+				s << "00";
+#ifdef DEBUG
+			std::cerr << "get_line getting: " << s.str() << std::endl;	
+#endif	
+			return s.str();	
+		}	
+	}
+	file.unget();
+#ifdef DEBUG
+	std::cerr << "get_line getting: " << s.str() << std::endl;	
+#endif
+	return s.str();	
+}
+

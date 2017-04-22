@@ -29,6 +29,13 @@ class AES
 		 *  @param plaintextFileName file name of the plaintext file
 		 */ 
     void encrypt(std::string keyFileName, std::string plaintextFileName);
+
+		/** Grab a 8 bytes of input from the input file. Pads the input 
+		 *	if necessary with zeroes. 
+		 *	@param file the input file
+		 *	@return a hex string
+		 */
+		std::string get_line(std::ifstream& file);
 	
 		/** Encrypt a line of hex characters.
 		 *	@param line the line of hex characters to encrypt
