@@ -3,6 +3,8 @@
 
 /** The debugging flag. Uncomment to print debugging messages. */
 //#define DEBUG 1
+//#define DB_2 1
+
 
 /**
  *  A class designed to encapsulate all block cipher functions used in the 
@@ -17,6 +19,7 @@ class AES
     unsigned int Nk;                  /*< the number of words in key */
     unsigned int Nr;                 	/*< the number of rounds */
 		unsigned int key_schedule[60];		/*< the expanded key */
+		bool PADDED;											/*< did we have to pad? */
 
   public:
 

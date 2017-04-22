@@ -13,5 +13,9 @@ check: TestAES ../src/AES
 	../src/AES d Acceptance1key.txt in.tmp.enc
 	diff -i in.tmp.enc.dec in.tmp
 
+	../src/AES e Acceptance1key.txt example_binary2
+	../src/AES d Acceptance1key.txt example_binary2.enc
+	diff -i example_binary2 example_binary2.enc.dec
+
 clean:
 	rm -rf *tmp* *.o TestAES Makefile

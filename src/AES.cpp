@@ -12,6 +12,7 @@ AES::AES()
 	Nb = 4;
 	Nk = 8;
 	Nr = 14;
+	PADDED = false;
 }
 
 void AES::init_key(std::string k)
@@ -268,11 +269,11 @@ void AES::encrypt(std::string keyFileName, std::string plaintextFileName)
 	s = get_line(pt);
 	while (s != "")
 	{
-#ifdef DEBUG
+#ifdef DB_2
 		std::cerr << "(e) plaintext: " << s << std::endl;
 #endif
 		std::string t = encrypt_line(s);
-#ifdef DEBUG
+#ifdef DB_2
 		std::cerr << "(e) ciphertext: " << t << std::endl;
 #endif
 		for (unsigned int i = 0; i < 32; i+=2)
@@ -298,17 +299,17 @@ void AES::decrypt(std::string keyFileName, std::string ciphertextFileName)
 	s = get_line(ct);
 	while (s != "")
 	{
-#ifdef DEBUG
+#ifdef DB_2
 		std::cerr << "(d) ciphertext: " << s << std::endl;
 #endif
 		std::string t = decrypt_line(s);
-#ifdef DEBUG
+#ifdef DB_2
 		std::cerr << "(d) plaintext: " << t << std::endl;
 #endif
 		for (unsigned int i = 0; i < 32; i+=2)
 		{
 			unsigned char c = (unsigned char)std::stoi(t.substr(i, 2), nullptr, 16);
-			if (c) pt << c; 	
+			/*if (c || (!c && !PADDED))*/ pt << c; 	
 		}
 //	pt << decrypt_line(s) << std::endl;
 		s = get_line(ct);
@@ -450,6 +451,7 @@ std::string AES::get_line(std::ifstream& file)
 #ifdef DEBUG
 			std::cerr << "get_line getting: " << s.str() << std::endl;	
 #endif	
+			PADDED = true;
 			return s.str();	
 		}	
 	}
