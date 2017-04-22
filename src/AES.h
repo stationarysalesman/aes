@@ -19,7 +19,7 @@ class AES
     unsigned int Nk;                  /*< the number of words in key */
     unsigned int Nr;                 	/*< the number of rounds */
 		unsigned int key_schedule[60];		/*< the expanded key */
-		bool PADDED;											/*< did we have to pad? */
+		unsigned int padded_bytes;				/*< the number of bytes added as padding */
 
   public:
 
@@ -41,10 +41,10 @@ class AES
 		std::string get_line(std::ifstream& file);
 	
 		/** Encrypt a line of hex characters.
-		 *	@param line the line of hex characters to encrypt
+		 *	@pre a line of plaintext has been loaded into the state array 
 		 *	@return a line of encrypted hex characters
 		 */
-		std::string encrypt_line(std::string line);
+		std::string encrypt_line();
 	
 		/** Decrypt a ciphertext.
 		 *  @param keyFileName file name of the file containing the key
@@ -53,10 +53,10 @@ class AES
 		void decrypt(std::string keyFileName, std::string plaintextFileName);
 
 		/** Decrypt a line of hex characters.
-		 *	@param line the line of hex characters to decrypt
+		 *	@pre a line of ciphertext has been loaded into the state array
 		 *	@return a line of decrypted hex characters
 		 */
-		std::string decrypt_line(std::string line);
+		std::string decrypt_line();
 	
 		/** Initialize the key schedule based on the provided 256-bit key.
 		 * 	@param k the string of hex-coded byte values of the key
@@ -126,8 +126,6 @@ class AES
 		void print_state(std::ostream& o);		
 		std::string export_state();
 
-	private:
-
 		/** Multiply two numbers via a Log table lookup. 
 		 *	@param a the first number
 		 *	@param b the second number
@@ -135,5 +133,7 @@ class AES
 		 */
 		unsigned char gmul(int a, int b);
 
+		/** Zero out the state array */
+		void zero_state();
 
 };

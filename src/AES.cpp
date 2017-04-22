@@ -12,7 +12,7 @@ AES::AES()
 	Nb = 4;
 	Nk = 8;
 	Nr = 14;
-	PADDED = false;
+	padded_bytes = 0;
 }
 
 void AES::init_key(std::string k)
@@ -159,17 +159,9 @@ void AES::MixHelper(unsigned int c)
 
 }
 
-std::string AES::encrypt_line(std::string line)
+std::string AES::encrypt_line()
 {
-	//TODO: deal with malformed input?
-	
-	if (line.size() < 32)
-		line.append(32 - line.size(), '0');
-
-	/* Encryption prologue */
-	init_state(line);
 	AddRoundKey(0);
-
 #ifdef DEBUG
 	std::cout << "After addRoundKey(0): " << std::endl << export_state() << std::endl;
 #endif
@@ -210,10 +202,8 @@ std::string AES::encrypt_line(std::string line)
 	return export_state();	
 }
 
-std::string AES::decrypt_line(std::string line)
+std::string AES::decrypt_line()
 {
-	/* Decryption prologue */
-	init_state(line);
 	AddRoundKey(Nr*Nb);
 #ifdef DEBUG	
 	std::cout << "After addRoundKey(" << Nr << "): " << std::endl<< export_state() << std::endl;
@@ -272,16 +262,27 @@ void AES::encrypt(std::string keyFileName, std::string plaintextFileName)
 #ifdef DB_2
 		std::cerr << "(e) plaintext: " << s << std::endl;
 #endif
-		std::string t = encrypt_line(s);
+		init_state(s);		
+		std::string t = encrypt_line();
 #ifdef DB_2
 		std::cerr << "(e) ciphertext: " << t << std::endl;
 #endif
 		for (unsigned int i = 0; i < 32; i+=2)
 			ct << (unsigned char)std::stoi(t.substr(i, 2), nullptr, 16);
 
-//		ct << encrypt_line(s) << std::endl;
 		s = get_line(pt);
 	}
+
+	/* We added padding, so we need to append the number of padded bytes 
+		so we can stip off the padding during decryption */
+/*
+	if (padded_bytes > 0)
+	{
+		zero_state();
+		state[0][0] = padded_bytes;
+			
+	}
+*/	
 	return;			
 }
 
@@ -302,7 +303,8 @@ void AES::decrypt(std::string keyFileName, std::string ciphertextFileName)
 #ifdef DB_2
 		std::cerr << "(d) ciphertext: " << s << std::endl;
 #endif
-		std::string t = decrypt_line(s);
+		init_state(s);
+		std::string t = decrypt_line();
 #ifdef DB_2
 		std::cerr << "(d) plaintext: " << t << std::endl;
 #endif
@@ -446,12 +448,12 @@ std::string AES::get_line(std::ifstream& file)
 		c = file.get();	
 		if (file.eof())
 		{
+			padded_bytes = 16 - (i + 1);
 			for (unsigned int j = i+1; j < 16; ++j)
 				s << "00";
 #ifdef DEBUG
 			std::cerr << "get_line getting: " << s.str() << std::endl;	
 #endif	
-			PADDED = true;
 			return s.str();	
 		}	
 	}
@@ -462,3 +464,9 @@ std::string AES::get_line(std::ifstream& file)
 	return s.str();	
 }
 
+void AES::zero_state()
+{
+	for (unsigned int i = 0; i < 4; ++i)
+		for (unsigned int j = 0; j < 4; ++j)
+			state[i][j] ^= state[i][j];
+}
