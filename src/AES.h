@@ -36,12 +36,12 @@ class AES
     void encrypt(std::string keyFileName, std::string plaintextFileName, 
 									std::string outFileName = "");
 
-		/** Grab a 8 bytes of input from the input file. Pads the input 
-		 *	if necessary with zeroes. 
+		/** Grab a 8 bytes of input from the input file and load them into 
+		 *	the state array. Pads the input with zeroes if necessary. 
 		 *	@param file the input file
-		 *	@return a hex string
+		 *	@return -1 on EOF, 0 otherwise
 		 */
-		std::string get_line(std::ifstream& file);
+		int get_line(std::ifstream& file);
 	
 		/** Encrypt a line of hex characters.
 		 *	@pre a line of plaintext has been loaded into the state array 

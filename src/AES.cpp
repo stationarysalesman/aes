@@ -258,21 +258,21 @@ void AES::encrypt(std::string keyFileName, std::string plaintextFileName, std::s
 	std::string s;
 	k >> s;
 	init_key(s);
-	s = get_line(pt);
-	while (s != "")
+	int r = get_line(pt);
+	while (r != -1)
 	{
 #ifdef DB_2
-		std::cerr << "(e) plaintext: " << s << std::endl;
+		std::cerr << "(e) plaintext: " << export_state() << std::endl;
 #endif
-		init_state(s);		
+//		init_state(s);		
 		t = encrypt_line();
 #ifdef DB_2
-		std::cerr << "(e) ciphertext: " << t << std::endl;
+		std::cerr << "(e) ciphertext: " << export_state() << std::endl;
 #endif
 		for (unsigned int i = 0; i < 32; i+=2)
 			ct << (unsigned char)std::stoi(t.substr(i, 2), nullptr, 16);
 
-		s = get_line(pt);
+		r = get_line(pt);
 	}
 
 	/* Append the number of padded bytes so we can stip off any padding during decryption */
@@ -316,13 +316,13 @@ void AES::decrypt(std::string keyFileName, std::string ciphertextFileName, std::
 	std::string s;
 	k >> s;
 	init_key(s);
-	s = get_line(ct);
-	while (s != "")
+	int r = get_line(ct);
+	while (r != -1)
 	{
 #ifdef DB_2
 		std::cerr << "(d) ciphertext: " << s << std::endl;
 #endif
-		init_state(s);
+//		init_state(s);
 		std::string t = decrypt_line();
 #ifdef DB_2
 		std::cerr << "(d) plaintext: " << t << std::endl;
@@ -332,7 +332,7 @@ void AES::decrypt(std::string keyFileName, std::string ciphertextFileName, std::
 			c = (unsigned char)std::stoi(t.substr(i, 2), nullptr, 16);
 			pt << c; 	
 		}
-		s = get_line(ct);
+		r = get_line(ct);
 	}
 
 	/* Need to determine if any padding was added */
@@ -340,8 +340,13 @@ void AES::decrypt(std::string keyFileName, std::string ciphertextFileName, std::
 	std::ifstream dec;
 	dec.open("decrypt.tmp", std::fstream::in);
 	dec.seekg(-16, dec.end);
-	s = get_line(dec);
-	unsigned int num_bytes = std::stoi(s.substr(0, 2), nullptr, 16);
+	r = get_line(dec);
+//	unsigned int num_bytes = std::stoi(s.substr(0, 2), nullptr, 16);
+	unsigned int num_bytes = state[0][0];
+
+#ifdef DEBUG
+	std::cerr << "decrypt: found " << num_bytes << " of padding" << std::endl;
+#endif
 	
 	/* Get total length of file */
 	dec.clear();
@@ -354,7 +359,7 @@ void AES::decrypt(std::string keyFileName, std::string ciphertextFileName, std::
 	std::ofstream dec_tmp;
 	dec_tmp.open(outputName);
 	c = dec.get();
-	for (unsigned int i = 0; i < len - 16 - num_bytes; ++i)
+	for (unsigned int i = 0; i < len - (16 + num_bytes); ++i)
 	{
 		dec_tmp.put(c);
 		c = dec.get();
@@ -496,34 +501,37 @@ std::string AES::export_state()
 	return o.str();		
 }
 
-std::string AES::get_line(std::ifstream& file)
+int AES::get_line(std::ifstream& file)
 {
-	if (file.eof()) return "";
+	if (file.eof()) return -1;
 
-	std::stringstream s;
+//	std::stringstream s;
 	unsigned char c;
 	c = file.get();
-//	s << std::hex << ((c & 0xF0) >> 4) << (c & 0xF);
 	for (unsigned int i = 0; i < 16; ++i)
 	{
-		s << std::hex << ((c & 0xF0) >> 4) << (c & 0xF);
+	//	s << std::hex << ((c & 0xF0) >> 4) << (c & 0xF);
+		state[i%4][i/4] = c;	
 		c = file.get();	
 		if (file.eof())
 		{
 			padded_bytes = 16 - (i + 1);
 			for (unsigned int j = i+1; j < 16; ++j)
-				s << "00";
+				state[j%4][j/4] = 0;
+	//			s << "00";
+				
 #ifdef DEBUG
-			std::cerr << "get_line getting: " << s.str() << std::endl;	
+			std::cerr << "last line: get_line getting: " << export_state() << std::endl;	
 #endif	
-			return s.str();	
+			return 0;	
 		}	
 	}
 	file.unget();
 #ifdef DEBUG
-	std::cerr << "get_line getting: " << s.str() << std::endl;	
+	std::cerr << "get_line getting: " << export_state() << std::endl;	
 #endif
-	return s.str();	
+
+	return 0;
 }
 
 void AES::zero_state()
