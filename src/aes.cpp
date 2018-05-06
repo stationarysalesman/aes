@@ -1,21 +1,22 @@
-#include "src/AES.h"
+#include "src/aes.h"
 #include "src/Rijndael.h"
 #include <string>
 #include <iomanip>
 #include <fstream>
 
 /** 
- * Initialize the parameters of AES-256.
+ * Initialize the parameters of aes-256.
  */	
-AES::AES()
+aes::aes()
 {
 	Nb = 4;
 	Nk = 8;
 	Nr = 14;
 	padded_bytes = 0;
+	zero_state();
 }
 
-void AES::init_key(std::string k)
+void aes::init_key(std::string k)
 {
 	for (unsigned int i = 0, j = 0; i < k.size(); i += 2, j++)
   	key[j] = (unsigned char)std::stoi(k.substr(i, 2), nullptr, 16);	
@@ -51,7 +52,7 @@ void AES::init_key(std::string k)
 	return;
 }
 
-unsigned int AES::SubWord(unsigned int w)
+unsigned int aes::SubWord(unsigned int w)
 {
 	unsigned int i1 = (w >> 24) & 0xFF;
 	unsigned int i2 = (w >> 16) & 0xFF;
@@ -64,12 +65,12 @@ unsigned int AES::SubWord(unsigned int w)
 	return (Sbox[c1] << 24) | (Sbox[c2] << 16) | (Sbox[c3] << 8) | Sbox[c4];
 }
 
-unsigned int AES::RotWord(unsigned int w)
+unsigned int aes::RotWord(unsigned int w)
 {
 	return (w << 8) | ((w >> 24) & 0xFF);
 }
 
-void AES::init_state(std::string bytes)
+void aes::init_state(std::string bytes)
 {
 	unsigned char b[16];
 	unsigned int pos = 0;
@@ -85,14 +86,14 @@ void AES::init_state(std::string bytes)
 			state[i][j] = b[i+4*j];	
 }
 
-void AES::SubBytes()
+void aes::SubBytes()
 {
 	for (unsigned int i = 0; i < 4; ++i)
 		for (unsigned int j = 0; j < 4; ++j)
 			state[i][j] = Sbox[state[i][j]];
 }
 
-void AES::ShiftRows()
+void aes::ShiftRows()
 {
 	unsigned char *r1 = state[1];
 	unsigned char *r2 = state[2];
@@ -122,7 +123,7 @@ void AES::ShiftRows()
 
 }
 
-unsigned char AES::gmul(int a, int b)
+unsigned char aes::gmul(int a, int b)
 {
 	int inda = (a < 0) ? (a + 256) : a;
 	int indb = (b < 0) ? (b + 256) : b;
@@ -138,13 +139,13 @@ unsigned char AES::gmul(int a, int b)
 
 }
 
-void AES::MixColumns()
+void aes::MixColumns()
 {
 	for (unsigned int i = 0; i < 4; ++i)
 		MixHelper(i);
 }
 
-void AES::MixHelper(unsigned int c)
+void aes::MixHelper(unsigned int c)
 {
 	unsigned char a[4];
 
@@ -159,7 +160,7 @@ void AES::MixHelper(unsigned int c)
 
 }
 
-std::string AES::encrypt_line()
+std::string aes::encrypt_line()
 {
 	AddRoundKey(0);
 #ifdef DEBUG
@@ -202,7 +203,7 @@ std::string AES::encrypt_line()
 	return export_state();	
 }
 
-std::string AES::decrypt_line()
+std::string aes::decrypt_line()
 {
 	AddRoundKey(Nr*Nb);
 #ifdef DEBUG	
@@ -245,7 +246,7 @@ std::string AES::decrypt_line()
 	return export_state();
 
 }
-void AES::encrypt(std::string keyFileName, std::string plaintextFileName, std::string outFileName)
+void aes::encrypt(std::string keyFileName, std::string plaintextFileName, std::string outFileName)
 {
 	std::ifstream k;
 	std::ifstream pt;
@@ -303,7 +304,7 @@ void AES::encrypt(std::string keyFileName, std::string plaintextFileName, std::s
 	return;
 }
 
-void AES::decrypt(std::string keyFileName, std::string ciphertextFileName, std::string outFileName)
+void aes::decrypt(std::string keyFileName, std::string ciphertextFileName, std::string outFileName)
 {
 	std::ifstream k;
 	std::ifstream ct;	
@@ -387,14 +388,14 @@ void AES::decrypt(std::string keyFileName, std::string ciphertextFileName, std::
 }
 
 
-void AES::InvSubBytes()
+void aes::InvSubBytes()
 {
 	for (unsigned int i = 0; i < 4; ++i)
 		for (unsigned int j = 0; j < 4; ++j)
 			state[i][j] = InvSbox[state[i][j]];
 }
 
-void AES::InvShiftRows()
+void aes::InvShiftRows()
 {
 	unsigned char *r1 = state[1];
 	unsigned char *r2 = state[2];
@@ -424,13 +425,13 @@ void AES::InvShiftRows()
 
 }
 
-void AES::InvMixColumns()
+void aes::InvMixColumns()
 {
 	for (unsigned int i = 0; i < 4; ++i)
 		InvMixHelper(i);
 }
 
-void AES::InvMixHelper(unsigned int c)
+void aes::InvMixHelper(unsigned int c)
 {
 	unsigned char a[4];
 
@@ -446,7 +447,7 @@ void AES::InvMixHelper(unsigned int c)
 }
 
 
-void AES::AddRoundKey(unsigned int index)
+void aes::AddRoundKey(unsigned int index)
 {
 	unsigned int cols[4];
 	for (unsigned int i = 0, j = index; i < 4; ++i, ++j)
@@ -462,7 +463,7 @@ void AES::AddRoundKey(unsigned int index)
 
 
 /***** Utilities *****/
-unsigned int AES::column_from_key_schedule(unsigned int i)
+unsigned int aes::column_from_key_schedule(unsigned int i)
 {
 	unsigned int i1 = (i / 4) * 4; /* Index of 1st word in array that contains column */
 	unsigned int i2 = 24 - ((i % 4) * 8); /* Amount to shift each word to get desired byte */
@@ -474,7 +475,7 @@ unsigned int AES::column_from_key_schedule(unsigned int i)
 }
 
 /***** Debugging *****/
-void AES::print_expanded_key()
+void aes::print_expanded_key()
 {
 
 	for (unsigned int i = 0; i < sizeof(key_schedule)/sizeof(key_schedule[0]); ++i)
@@ -483,7 +484,7 @@ void AES::print_expanded_key()
 	std::cout << std::endl;	
 }
 
-void AES::print_state(std::ostream& o)
+void aes::print_state(std::ostream& o)
 {
 	for (unsigned int i = 0; i < 4; ++i)
 		for (unsigned int j = 0; j < 4; ++j)
@@ -492,7 +493,7 @@ void AES::print_state(std::ostream& o)
 	o << std::endl;	
 }
 
-std::string AES::export_state()
+std::string aes::export_state()
 {
 	std::ostringstream o;
 	for (unsigned int i = 0; i < 4; ++i)
@@ -501,7 +502,7 @@ std::string AES::export_state()
 	return o.str();		
 }
 
-int AES::get_line(std::ifstream& file)
+int aes::get_line(std::ifstream& file)
 {
 	if (file.eof()) return -1;
 
@@ -511,7 +512,7 @@ int AES::get_line(std::ifstream& file)
 	for (unsigned int i = 0; i < 16; ++i)
 	{
 	//	s << std::hex << ((c & 0xF0) >> 4) << (c & 0xF);
-		state[i%4][i/4] = c;	
+		state[i%4][i/4] = c;
 		c = file.get();	
 		if (file.eof())
 		{
@@ -534,7 +535,7 @@ int AES::get_line(std::ifstream& file)
 	return 0;
 }
 
-void AES::zero_state()
+void aes::zero_state()
 {
 	for (unsigned int i = 0; i < 4; ++i)
 		for (unsigned int j = 0; j < 4; ++j)

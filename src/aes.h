@@ -8,9 +8,9 @@
 
 /**
  *  A class designed to encapsulate all block cipher functions used in the 
- *  AES-256 algorithm. This implementation operates only in CBC mode. 
+ *  aes-256 algorithm. This implementation operates only in CBC mode. 
  */
-class AES
+class aes
 {
   private:
     unsigned char state[4][4];        /*< the state array */
@@ -23,9 +23,9 @@ class AES
 
   public:
 
-		/** Initialze the state for AES-256.
+		/** Initialze the state for aes-256.
 		 */
-		AES();
+		aes();
 
 		/** Encrypt a plaintext file. Can optionally provide an output file 
 		 *	for testing, etc. 

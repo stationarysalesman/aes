@@ -1,5 +1,5 @@
 AM_CXXFLAGS=-Wall -std=c++11
 
-bin_PROGRAMS=AES
-AES_SOURCES=RunAES.cpp AES.cpp AES.h Rijndael.h
+bin_PROGRAMS=aes
+aes_SOURCES=RunAES.cpp aes.cpp aes.h Rijndael.h
 

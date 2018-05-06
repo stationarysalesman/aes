@@ -1,4 +1,4 @@
-#include "AES.h"
+#include "aes.h"
 #include <iostream>
 #include <unistd.h>
 
@@ -36,7 +36,7 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	AES cipher = AES();
+	aes cipher = aes();
 
 	/* Encrypt a file */	
 	if (encrypt && !decrypt)
