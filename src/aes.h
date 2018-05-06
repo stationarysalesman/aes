@@ -14,12 +14,23 @@ class aes
 {
   private:
     unsigned char state[4][4];        /*< the state array */
+
+    /* The initialization vector serves to hold the initialization vector during 
+     * decryption as well as successive blocks of cipher text. The 'secondary 
+     * buffer' is simply a placeholder; the name was chosen to distinguish it from 
+     * the other variable. Both function as temporary storage during decryption:
+     *      - the initialization_vector functions as the first placeholder
+     *      - the secondary_buffer serves to hold a block of ciphertext so that
+     *        it may be utilized in a subsequent round of decryption
+     */
+    unsigned char initialization_vector[4][4];
+    unsigned char secondary_buffer[4][4];
     unsigned char key[32];            /*< the 256-bit key */
     unsigned int Nb;                	/*< the number of words in state */
     unsigned int Nk;                  /*< the number of words in key */
     unsigned int Nr;                 	/*< the number of rounds */
-		unsigned int key_schedule[60];		/*< the expanded key */
-		unsigned int padded_bytes;				/*< the number of bytes added as padding */
+	unsigned int key_schedule[60];		/*< the expanded key */
+	unsigned int padded_bytes;				/*< the number of bytes added as padding */
 
   public:
 
@@ -36,15 +47,30 @@ class aes
     void encrypt(std::string keyFileName, std::string plaintextFileName, 
 									std::string outFileName = "");
 
-		/** Grab a 8 bytes of input from the input file and load them into 
+		/** Grab a 8 bytes of plaintext from the input file and load them into 
 		 *	the state array. Pads the input with zeroes if necessary. 
 		 *	@param file the input file
 		 *	@return -1 on EOF, 0 otherwise
 		 */
-		int get_line(std::ifstream& file);
+		int get_pt_line(std::ifstream& file);
 	
+    	/** Grab a 8 bytes of ciphertext from the input file and load them into 
+		 *	the state array. Pads the input with zeroes if necessary. 
+		 *	@param file the input file
+		 *	@return -1 on EOF, 0 otherwise
+		 */
+		int get_ct_line(std::ifstream& file);
+
+     	/** Grab a 8 bytes of ciphertext from the input file and load them into 
+		 *	the state array. Pads the input with zeroes if necessary. 
+		 *	@param file the input file
+		 *	@return -1 on EOF, 0 otherwise
+		 */
+
+    	
 		/** Encrypt a line of hex characters.
 		 *	@pre a line of plaintext has been loaded into the state array 
+         *  @param file the input filestream
 		 *	@return a line of encrypted hex characters
 		 */
 		std::string encrypt_line();

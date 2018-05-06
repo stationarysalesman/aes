@@ -4,6 +4,15 @@
 #include <iomanip>
 #include <fstream>
 
+/* random numbers */
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
+/* memcpy */
+#include <string.h>
+
 /** 
  * Initialize the parameters of aes-256.
  */	
@@ -14,6 +23,12 @@ aes::aes()
 	Nr = 14;
 	padded_bytes = 0;
 	zero_state();
+    for (unsigned int i = 0; i < 4; ++i)
+        for (unsigned int j = 0; j < 4; ++j)
+        {
+            initialization_vector[i][j] = 0;
+            secondary_buffer[i][j] = 0;
+        }
 }
 
 void aes::init_key(std::string k)
@@ -84,6 +99,7 @@ void aes::init_state(std::string bytes)
 	for (unsigned int i = 0; i < 4; ++i)
 		for (unsigned int j = 0; j < 4; ++j)
 			state[i][j] = b[i+4*j];	
+
 }
 
 void aes::SubBytes()
@@ -243,6 +259,11 @@ std::string aes::decrypt_line()
 	std::cout << "After addRoundKey(0): " << std::endl<< export_state() << std::endl;
 #endif
 
+    /* CBC mode: XOR with the 'initialization_vector' buffer */
+    for (unsigned int i = 0; i < 4; ++i)
+        for (unsigned int j = 0; j < 4; ++j)
+            state[i][j] ^= initialization_vector[i][j];
+    
 	return export_state();
 
 }
@@ -259,7 +280,45 @@ void aes::encrypt(std::string keyFileName, std::string plaintextFileName, std::s
 	std::string s;
 	k >> s;
 	init_key(s);
-	int r = get_line(pt);
+
+    /* Apply a random initialization vector to the plaintext to initialize cipher block chaining */
+    char iv[16];
+    for (unsigned int i = 0; i < 16; ++i)
+        iv[i] = 0;
+
+    size_t count = 16;
+    int fd = open("/dev/urandom", O_RDONLY);
+    if (fd == -1)
+    {
+        std::cerr << "Error: cannot access /dev/urandom" << std::endl;
+        exit(76323);
+    }
+    ssize_t result = read(fd, &iv, count);
+    if (result < 16)
+    {
+        std::cerr << "Error: read from /dev/urandom failed" << std::endl;
+        exit(76324);
+    }
+    
+    result = close(fd);
+    if (result != 0)
+        std::cerr << "Warning: /dev/urandom could not be closed properly. Continuing." << std::endl;
+   
+    std::string iv_str = (std::string)(iv);
+    std::ostringstream iv_hex_b;
+    for (unsigned int i = 0; i < 16; ++i)
+    {
+        unsigned char byte = iv[i];
+        unsigned char nybbles[2] = {0};
+        nybbles[0] = byte & 0xF;
+        nybbles[1] = (byte & 0xF0) >> 4;
+        iv_hex_b << std::hex << (unsigned int)nybbles[0] << (unsigned int)nybbles[1];
+         
+    }
+    std::string iv_hex = iv_hex_b.str();
+    init_state(iv_hex); 
+
+    int r = get_pt_line(pt);
 	while (r != -1)
 	{
 #ifdef DB_2
@@ -273,13 +332,12 @@ void aes::encrypt(std::string keyFileName, std::string plaintextFileName, std::s
 		for (unsigned int i = 0; i < 32; i+=2)
 			ct << (unsigned char)std::stoi(t.substr(i, 2), nullptr, 16);
 
-		r = get_line(pt);
+		r = get_pt_line(pt);
 	}
 
-	/* Append the number of padded bytes so we can stip off any padding during decryption */
+	/* Append the number of padded bytes so we can strip off any padding during decryption */
 
-	zero_state();
-	state[0][0] = padded_bytes;
+	state[0][0] ^= padded_bytes;
 #ifdef DB_2
 	std::cerr << "padding: " << export_state() << std::endl;
 #endif
@@ -290,6 +348,12 @@ void aes::encrypt(std::string keyFileName, std::string plaintextFileName, std::s
 	for (unsigned int i = 0; i < 32; i+=2)
 		ct << (unsigned char)std::stoi(t.substr(i, 2), nullptr, 16);
 
+
+    /* Write out the initialization vector */
+    for (unsigned int i = 0; i < 32; i+=2)
+        ct << (unsigned char)std::stoi(iv_hex.substr(i, 2), nullptr, 16);
+
+ 
 	/* If encrypting in place, remove the original, and rename the temporary file */
 	if (outFileName.compare("") == 0)
 	{
@@ -317,38 +381,72 @@ void aes::decrypt(std::string keyFileName, std::string ciphertextFileName, std::
 	std::string s;
 	k >> s;
 	init_key(s);
-	int r = get_line(ct);
-	while (r != -1)
+	
+    /* Grab the initialization vector and decrypt the first block of ciphertext */
+    ct.seekg(-16, ct.end);
+	c = ct.get();
+	for (unsigned int i = 0; i < 16; ++i)
+	{
+		initialization_vector[i%4][i/4] = c;
+		c = ct.get();	
+	}
+	ct.unget();
+
+    /* Now the state of our system is set: the initialization vector is stored in
+     * the initialization_vector variable at the beginning of our first decryption 
+     * round. Before decryption of the block occurs, we store the ciphertext in a 
+     * temporary buffer (secondary_vector in aes.h) for use in subsequent rounds of 
+     * CBC-mode decryption. After decryption occurs in the current round, the data 
+     * stored in the IV variable is no longer needed, and so the secondary_vector 
+     * is swapped into the IV variable, and the cycle continues. */
+    ct.clear(); 
+    ct.seekg(0, ct.beg);
+    int r = get_ct_line(ct); 
+    while (r != -1)
 	{
 #ifdef DB_2
-		std::cerr << "(d) ciphertext: " << s << std::endl;
+		std::cerr << "(d) ciphertext: " << export_state() << std::endl;
 #endif
-//		init_state(s);
 		std::string t = decrypt_line();
 #ifdef DB_2
 		std::cerr << "(d) plaintext: " << t << std::endl;
 #endif
+
+        /* Now that we have decrypted, we should move the ciphertext from secondary
+         * buffer to the IV buffer. */
+        for (unsigned int i = 0; i < 4; ++i)
+            for (unsigned int j = 0; j < 4; ++j)
+                initialization_vector[i][j] = secondary_buffer[i][j];
+
+#ifdef DB_2
+        std::cerr << "(d) IV: " << std::hex << (unsigned char)initialization_vector[0][0] << std::endl;
+        std::cerr << "(d) 2ndary: " << std::hex << (unsigned char)secondary_buffer[0][0] << std::endl;
+        std::cerr << "t: " << t << std::endl;
+#endif
+
 		for (unsigned int i = 0; i < 32; i+=2)
 		{
 			c = (unsigned char)std::stoi(t.substr(i, 2), nullptr, 16);
 			pt << c; 	
 		}
-		r = get_line(ct);
+		r = get_ct_line(ct);
 	}
 
 	/* Need to determine if any padding was added */
 	pt.close();
 	std::ifstream dec;
 	dec.open("decrypt.tmp", std::fstream::in);
-	dec.seekg(-16, dec.end);
-	r = get_line(dec);
+	dec.seekg(-32, dec.end);
+    //TODO: is this right??!?!?!?!?!#*&#%$(*7
+    zero_state();
+	r = get_pt_line(dec);
 //	unsigned int num_bytes = std::stoi(s.substr(0, 2), nullptr, 16);
 	unsigned int num_bytes = state[0][0];
 
-#ifdef DEBUG
-	std::cerr << "decrypt: found " << num_bytes << " of padding" << std::endl;
-#endif
-	
+#ifdef DB_2
+	std::cerr << "decrypt: found " << std::dec << num_bytes << " of padding" << std::endl;
+    std::cerr << "state is: " << export_state() << std::endl;
+#endif	
 	/* Get total length of file */
 	dec.clear();
 	dec.seekg(0, dec.end);
@@ -360,7 +458,8 @@ void aes::decrypt(std::string keyFileName, std::string ciphertextFileName, std::
 	std::ofstream dec_tmp;
 	dec_tmp.open(outputName);
 	c = dec.get();
-	for (unsigned int i = 0; i < len - (16 + num_bytes); ++i)
+    // Note the second 16 below refers to the initialization vector appended to the file as well
+	for (unsigned int i = 0; i < len - ((16 + num_bytes) + 16); ++i)
 	{
 		dec_tmp.put(c);
 		c = dec.get();
@@ -502,7 +601,8 @@ std::string aes::export_state()
 	return o.str();		
 }
 
-int aes::get_line(std::ifstream& file)
+
+int aes::get_pt_line(std::ifstream& file)
 {
 	if (file.eof()) return -1;
 
@@ -512,7 +612,7 @@ int aes::get_line(std::ifstream& file)
 	for (unsigned int i = 0; i < 16; ++i)
 	{
 	//	s << std::hex << ((c & 0xF0) >> 4) << (c & 0xF);
-		state[i%4][i/4] = c;
+		state[i%4][i/4] ^= c; // CBC mode
 		c = file.get();	
 		if (file.eof())
 		{
@@ -534,6 +634,42 @@ int aes::get_line(std::ifstream& file)
 
 	return 0;
 }
+
+
+int aes::get_ct_line(std::ifstream& file)
+{
+	if (file.eof()) return -1;
+
+//	std::stringstream s;
+	unsigned char c;
+	c = file.get();
+	for (unsigned int i = 0; i < 16; ++i)
+	{
+	//	s << std::hex << ((c & 0xF0) >> 4) << (c & 0xF);
+		state[i%4][i/4] = c; 
+        secondary_buffer[i%4][i/4] = c; // copy to secondary storage
+		c = file.get();	
+		if (file.eof())
+		{
+			padded_bytes = 16 - (i + 1);
+			for (unsigned int j = i+1; j < 16; ++j)
+				state[j%4][j/4] = 0;
+	//			s << "00";
+				
+#ifdef DEBUG
+			std::cerr << "last line: get_ct_line getting: " << export_state() << std::endl;	
+#endif	
+			return 0;	
+		}	
+	}
+	file.unget();
+#ifdef DEBUG
+	std::cerr << "get_ct_line getting: " << export_state() << std::endl;	
+#endif
+
+	return 0;
+}
+
 
 void aes::zero_state()
 {
