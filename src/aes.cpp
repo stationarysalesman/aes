@@ -1,679 +1,525 @@
-#include "src/aes.h"
-#include "src/Rijndael.h"
-#include <string>
-#include <iomanip>
-#include <fstream>
-
-/* random numbers */
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-
-/* memcpy */
+#include "aes.h"
+#include "Rijndael.h"
 #include <string.h>
+#include <memory.h>
+#include <stdio.h>
+#include <fcntl.h>
+#include <stdlib.h>
 
-/** 
- * Initialize the parameters of aes-256.
- */	
+//C++ functionality for convenience
+#include <string>
+#include <iostream>
 aes::aes()
 {
-	Nb = 4;
-	Nk = 8;
-	Nr = 14;
-	padded_bytes = 0;
-	zero_state();
-    for (unsigned int i = 0; i < 4; ++i)
-        for (unsigned int j = 0; j < 4; ++j)
-        {
-            initialization_vector[i][j] = 0;
-            secondary_buffer[i][j] = 0;
-        }
+  Nb = 4;
+  Nk = 8;
+  Nr = 14;
+  padding_bytes = 0;
 }
 
-void aes::init_key(std::string k)
+// exchanges columns in each of 4 rows
+// row0 - unchanged, row1- shifted left 1, 
+// row2 - shifted left 2 and row3 - shifted left 3
+
+void aes::ShiftRows ()
 {
-	for (unsigned int i = 0, j = 0; i < k.size(); i += 2, j++)
-  	key[j] = (unsigned char)std::stoi(k.substr(i, 2), nullptr, 16);	
+uchar tmp;
 
-	unsigned int i = 0;
-	while (i < Nk)
-	{
-		unsigned int w0 = key[4*i];
-		unsigned int w1 = key[4*i+1];
-		unsigned int w2 = key[4*i+2];
-		unsigned int w3 = key[4*i+3];
-		unsigned int w = w0 | (w1 << 8) | (w2 << 16) | (w3 << 24);
-		key_schedule[i] = w;
-		++i;
-	}
+	// just substitute row 0
+	state[0] = Sbox[state[0]], state[4] = Sbox[state[4]];
+	state[8] = Sbox[state[8]], state[12] = Sbox[state[12]];
 
-	i = Nk;
+	// rotate row 1
+	tmp = Sbox[state[1]], state[1] = Sbox[state[5]];
+	state[5] = Sbox[state[9]], state[9] = Sbox[state[13]], state[13] = tmp;
 
-	while (i < Nb * (Nr+1))
-	{
-		unsigned int temp = key_schedule[i-1];
+	// rotate row 2
+	tmp = Sbox[state[2]], state[2] = Sbox[state[10]], state[10] = tmp;
+	tmp = Sbox[state[6]], state[6] = Sbox[state[14]], state[14] = tmp;
 
-		if (i % Nk == 0)
-			temp = SubWord(RotWord(temp)) ^ Rcon[i/Nk];
-		else if (Nk > 6 && i % Nk == 4)
-			temp = SubWord(temp);
-		key_schedule[i] = key_schedule[i-Nk] ^ temp;
-
-		++i;
-
-	}
-	
-	return;
+	// rotate row 3
+	tmp = Sbox[state[15]], state[15] = Sbox[state[11]];
+	state[11] = Sbox[state[7]], state[7] = Sbox[state[3]], state[3] = tmp;
 }
 
-unsigned int aes::SubWord(unsigned int w)
+// restores columns in each of 4 rows
+// row0 - unchanged, row1- shifted right 1, 
+// row2 - shifted right 2 and row3 - shifted right 3
+void aes::InvShiftRows ()
 {
-	unsigned int i1 = (w >> 24) & 0xFF;
-	unsigned int i2 = (w >> 16) & 0xFF;
-	unsigned int i3 = (w >> 8) & 0xFF;
-	unsigned int i4 = w & 0xFF;
-	unsigned char c1 = (unsigned char)i1;
-	unsigned char c2 = (unsigned char)i2;
-	unsigned char c3 = (unsigned char)i3;
-	unsigned char c4 = (unsigned char)i4;
-	return (Sbox[c1] << 24) | (Sbox[c2] << 16) | (Sbox[c3] << 8) | Sbox[c4];
+uchar tmp;
+
+	// restore row 0
+	state[0] = InvSbox[state[0]], state[4] = InvSbox[state[4]];
+	state[8] = InvSbox[state[8]], state[12] = InvSbox[state[12]];
+
+	// restore row 1
+	tmp = InvSbox[state[13]], state[13] = InvSbox[state[9]];
+	state[9] = InvSbox[state[5]], state[5] = InvSbox[state[1]], state[1] = tmp;
+
+	// restore row 2
+	tmp = InvSbox[state[2]], state[2] = InvSbox[state[10]], state[10] = tmp;
+	tmp = InvSbox[state[6]], state[6] = InvSbox[state[14]], state[14] = tmp;
+
+	// restore row 3
+	tmp = InvSbox[state[3]], state[3] = InvSbox[state[7]];
+	state[7] = InvSbox[state[11]], state[11] = InvSbox[state[15]], state[15] = tmp;
 }
 
-unsigned int aes::RotWord(unsigned int w)
+// recombine and mix each row in a column
+void aes::MixSubColumns ()
 {
-	return (w << 8) | ((w >> 24) & 0xFF);
+uchar tmp[4 * Nb];
+
+	// mixing column 0
+	tmp[0] = Xtime2Sbox[state[0]] ^ Xtime3Sbox[state[5]] ^ Sbox[state[10]] ^ Sbox[state[15]];
+	tmp[1] = Sbox[state[0]] ^ Xtime2Sbox[state[5]] ^ Xtime3Sbox[state[10]] ^ Sbox[state[15]];
+	tmp[2] = Sbox[state[0]] ^ Sbox[state[5]] ^ Xtime2Sbox[state[10]] ^ Xtime3Sbox[state[15]];
+	tmp[3] = Xtime3Sbox[state[0]] ^ Sbox[state[5]] ^ Sbox[state[10]] ^ Xtime2Sbox[state[15]];
+
+	// mixing column 1
+	tmp[4] = Xtime2Sbox[state[4]] ^ Xtime3Sbox[state[9]] ^ Sbox[state[14]] ^ Sbox[state[3]];
+	tmp[5] = Sbox[state[4]] ^ Xtime2Sbox[state[9]] ^ Xtime3Sbox[state[14]] ^ Sbox[state[3]];
+	tmp[6] = Sbox[state[4]] ^ Sbox[state[9]] ^ Xtime2Sbox[state[14]] ^ Xtime3Sbox[state[3]];
+	tmp[7] = Xtime3Sbox[state[4]] ^ Sbox[state[9]] ^ Sbox[state[14]] ^ Xtime2Sbox[state[3]];
+
+	// mixing column 2
+	tmp[8] = Xtime2Sbox[state[8]] ^ Xtime3Sbox[state[13]] ^ Sbox[state[2]] ^ Sbox[state[7]];
+	tmp[9] = Sbox[state[8]] ^ Xtime2Sbox[state[13]] ^ Xtime3Sbox[state[2]] ^ Sbox[state[7]];
+	tmp[10]  = Sbox[state[8]] ^ Sbox[state[13]] ^ Xtime2Sbox[state[2]] ^ Xtime3Sbox[state[7]];
+	tmp[11]  = Xtime3Sbox[state[8]] ^ Sbox[state[13]] ^ Sbox[state[2]] ^ Xtime2Sbox[state[7]];
+
+	// mixing column 3
+	tmp[12] = Xtime2Sbox[state[12]] ^ Xtime3Sbox[state[1]] ^ Sbox[state[6]] ^ Sbox[state[11]];
+	tmp[13] = Sbox[state[12]] ^ Xtime2Sbox[state[1]] ^ Xtime3Sbox[state[6]] ^ Sbox[state[11]];
+	tmp[14] = Sbox[state[12]] ^ Sbox[state[1]] ^ Xtime2Sbox[state[6]] ^ Xtime3Sbox[state[11]];
+	tmp[15] = Xtime3Sbox[state[12]] ^ Sbox[state[1]] ^ Sbox[state[6]] ^ Xtime2Sbox[state[11]];
+
+	memcpy (state, tmp, sizeof(tmp));
 }
 
-void aes::init_state(std::string bytes)
+// restore and un-mix each row in a column
+void aes::InvMixSubColumns ()
 {
-	unsigned char b[16];
-	unsigned int pos = 0;
-	for (unsigned int a = 0; a < 16; ++a)
-	{
-		std::string sub = bytes.substr(pos, 2);
-		pos += 2;
-		b[a] = (unsigned char)std::stoi(sub, nullptr, 16);		
-	}
-	
-	for (unsigned int i = 0; i < 4; ++i)
-		for (unsigned int j = 0; j < 4; ++j)
-			state[i][j] = b[i+4*j];	
+uchar tmp[4 * Nb];
+int i;
 
+	// restore column 0
+	tmp[0] = XtimeE[state[0]] ^ XtimeB[state[1]] ^ XtimeD[state[2]] ^ Xtime9[state[3]];
+	tmp[5] = Xtime9[state[0]] ^ XtimeE[state[1]] ^ XtimeB[state[2]] ^ XtimeD[state[3]];
+	tmp[10] = XtimeD[state[0]] ^ Xtime9[state[1]] ^ XtimeE[state[2]] ^ XtimeB[state[3]];
+	tmp[15] = XtimeB[state[0]] ^ XtimeD[state[1]] ^ Xtime9[state[2]] ^ XtimeE[state[3]];
+
+	// restore column 1
+	tmp[4] = XtimeE[state[4]] ^ XtimeB[state[5]] ^ XtimeD[state[6]] ^ Xtime9[state[7]];
+	tmp[9] = Xtime9[state[4]] ^ XtimeE[state[5]] ^ XtimeB[state[6]] ^ XtimeD[state[7]];
+	tmp[14] = XtimeD[state[4]] ^ Xtime9[state[5]] ^ XtimeE[state[6]] ^ XtimeB[state[7]];
+	tmp[3] = XtimeB[state[4]] ^ XtimeD[state[5]] ^ Xtime9[state[6]] ^ XtimeE[state[7]];
+
+	// restore column 2
+	tmp[8] = XtimeE[state[8]] ^ XtimeB[state[9]] ^ XtimeD[state[10]] ^ Xtime9[state[11]];
+	tmp[13] = Xtime9[state[8]] ^ XtimeE[state[9]] ^ XtimeB[state[10]] ^ XtimeD[state[11]];
+	tmp[2]  = XtimeD[state[8]] ^ Xtime9[state[9]] ^ XtimeE[state[10]] ^ XtimeB[state[11]];
+	tmp[7]  = XtimeB[state[8]] ^ XtimeD[state[9]] ^ Xtime9[state[10]] ^ XtimeE[state[11]];
+
+	// restore column 3
+	tmp[12] = XtimeE[state[12]] ^ XtimeB[state[13]] ^ XtimeD[state[14]] ^ Xtime9[state[15]];
+	tmp[1] = Xtime9[state[12]] ^ XtimeE[state[13]] ^ XtimeB[state[14]] ^ XtimeD[state[15]];
+	tmp[6] = XtimeD[state[12]] ^ Xtime9[state[13]] ^ XtimeE[state[14]] ^ XtimeB[state[15]];
+	tmp[11] = XtimeB[state[12]] ^ XtimeD[state[13]] ^ Xtime9[state[14]] ^ XtimeE[state[15]];
+
+	for( i=0; i < 4 * Nb; i++ )
+		state[i] = InvSbox[tmp[i]];
 }
 
-void aes::SubBytes()
+// encrypt/decrypt columns of the key
+// n.b. you can replace this with
+//      byte-wise xor if you wish.
+
+void aes::AddRoundKey (unsigned *state, unsigned *key)
 {
-	for (unsigned int i = 0; i < 4; ++i)
-		for (unsigned int j = 0; j < 4; ++j)
-			state[i][j] = Sbox[state[i][j]];
+int idx;
+	for( idx = 0; idx < 4; idx++ )
+		state[idx] ^= key[idx];
 }
 
-void aes::ShiftRows()
+uchar Rcon[11] = {
+0x00, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36};
+
+// produce Nb bytes for each round
+void aes::ExpandKey (uchar *key, uchar *expkey)
 {
-	unsigned char *r1 = state[1];
-	unsigned char *r2 = state[2];
-	unsigned char *r3 = state[3];
+uchar tmp0, tmp1, tmp2, tmp3, tmp4;
+unsigned idx;
 
-	/* Rotate the 2nd row (state[1]) by 1 */
-	unsigned char c1 = r1[0];
-	r1[0] = r1[1];
-	r1[1] = r1[2];
-	r1[2] = r1[3];
-	r1[3] = c1;
+	memcpy (expkey, key, Nk * 4);
 
-	/* Rotate 3rd row (state[2]) by 2 */
-	c1 = r2[0];
-	unsigned char c2 = r2[1];
-	r2[0] = r2[2];
-	r2[1] = r2[3];
-	r2[2] = c1;
-	r2[3] = c2;
-
-	/* Rotate 4th row (state[3]) by 3 */
-	c1 = r3[3];
-	r3[3] = r3[2];
-	r3[2] = r3[1];
-	r3[1] = r3[0];
-	r3[0] = c1;
-
-}
-
-unsigned char aes::gmul(int a, int b)
-{
-	int inda = (a < 0) ? (a + 256) : a;
-	int indb = (b < 0) ? (b + 256) : b;
-
-	if ( (a != 0) && (b != 0) ) 
-	{
-		int index = (LogTable[inda] + LogTable[indb]);
-		unsigned char val = (unsigned char)(AlogTable[ index % 255 ] );
-		return val;
-	}
-  else 
-      return 0;
-
-}
-
-void aes::MixColumns()
-{
-	for (unsigned int i = 0; i < 4; ++i)
-		MixHelper(i);
-}
-
-void aes::MixHelper(unsigned int c)
-{
-	unsigned char a[4];
-
-  // note that a is just a copy of st[.][c]
-  for (unsigned int i = 0; i < 4; i++)
-      a[i] = state[i][c];
-
-	state[0][c] = (unsigned char)(gmul(2,a[0]) ^ a[2] ^ a[3] ^ gmul(3,a[1]));
-	state[1][c] = (unsigned char)(gmul(2,a[1]) ^ a[3] ^ a[0] ^ gmul(3,a[2]));
-	state[2][c] = (unsigned char)(gmul(2,a[2]) ^ a[0] ^ a[1] ^ gmul(3,a[3]));
-	state[3][c] = (unsigned char)(gmul(2,a[3]) ^ a[1] ^ a[2] ^ gmul(3,a[0]));
-
-}
-
-std::string aes::encrypt_line()
-{
-	AddRoundKey(0);
-#ifdef DEBUG
-	std::cout << "After addRoundKey(0): " << std::endl << export_state() << std::endl;
-#endif
-	
-	for (unsigned int round = 1; round < Nr; ++round)
-	{
-		SubBytes();
-#ifdef DEBUG
-		std::cout << "After subBytes: " << std::endl<< export_state() << std::endl;
-#endif
-		ShiftRows();
-#ifdef DEBUG
-		std::cout << "After shiftRows: " << std::endl<< export_state() << std::endl;
-#endif
-		MixColumns();
-#ifdef DEBUG
-		std::cout << "After mixColumns: "<< std::endl << export_state() << std::endl;
-#endif
-		AddRoundKey(round*Nb);
-#ifdef DEBUG
-		std::cout << "After addRoundKey(" << round << "): " << std::endl<< export_state() << std::endl;
-#endif
-	}
-
-	SubBytes();
-#ifdef DEBUG
-	std::cout << "After subBytes: " << std::endl<< export_state() << std::endl;
-#endif
-	ShiftRows();
-#ifdef DEBUG
-	std::cout << "After shiftRows: " << std::endl<< export_state() << std::endl;
-#endif
-	AddRoundKey(Nr*Nb);
-#ifdef DEBUG
-	std::cout << "After addRoundKey(" << Nr << "): " << std::endl<< export_state() << std::endl;
-#endif
-
-	return export_state();	
-}
-
-std::string aes::decrypt_line()
-{
-	AddRoundKey(Nr*Nb);
-#ifdef DEBUG	
-	std::cout << "After addRoundKey(" << Nr << "): " << std::endl<< export_state() << std::endl;
-#endif
-
-	for (unsigned int round = Nr-1; round > 0; --round)
-	{
-		InvShiftRows();
-#ifdef DEBUG
-	std::cout << "After invShiftRows: " << std::endl<< export_state() << std::endl;
-#endif
-		InvSubBytes();
-#ifdef DEBUG
-	std::cout << "After invSubBytes: " << std::endl<< export_state() << std::endl;
-#endif
-		AddRoundKey(round*Nb);
-#ifdef DEBUG
-	std::cout << "After addRoundKey(" << round << "): " << std::endl<< export_state() << std::endl;
-#endif
-		InvMixColumns();
-#ifdef DEBUG
-	std::cout << "After invMixColumns: " << std::endl<< export_state() << std::endl;
-#endif
-	}
-	
-	InvShiftRows();
-#ifdef DEBUG
-	std::cout << "After invShiftRows: " << std::endl<< export_state() << std::endl;
-#endif
-		InvSubBytes();
-#ifdef DEBUG
-	std::cout << "After invSubBytes: " << std::endl<< export_state() << std::endl;
-#endif
-		AddRoundKey(0);
-#ifdef DEBUG
-	std::cout << "After addRoundKey(0): " << std::endl<< export_state() << std::endl;
-#endif
-
-    /* CBC mode: XOR with the 'initialization_vector' buffer */
-    for (unsigned int i = 0; i < 4; ++i)
-        for (unsigned int j = 0; j < 4; ++j)
-            state[i][j] ^= initialization_vector[i][j];
-    
-	return export_state();
-
-}
-void aes::encrypt(std::string keyFileName, std::string plaintextFileName, std::string outFileName)
-{
-	std::ifstream k;
-	std::ifstream pt;
-	std::ofstream ct;	
-	std::string outputName = (outFileName.compare("") == 0) ? plaintextFileName + ".tmp" : outFileName;
-	std::string t;	
-	k.open(keyFileName);
-	pt.open(plaintextFileName);	
-	ct.open(outputName);
-	std::string s;
-	k >> s;
-	init_key(s);
-
-    /* Apply a random initialization vector to the plaintext to initialize cipher block chaining */
-    char iv[16];
-    for (unsigned int i = 0; i < 16; ++i)
-        iv[i] = 0;
-
-    size_t count = 16;
-    int fd = open("/dev/urandom", O_RDONLY);
-    if (fd == -1)
-    {
-        std::cerr << "Error: cannot access /dev/urandom" << std::endl;
-        exit(76323);
-    }
-    ssize_t result = read(fd, &iv, count);
-    if (result < 16)
-    {
-        std::cerr << "Error: read from /dev/urandom failed" << std::endl;
-        exit(76324);
-    }
-    
-    result = close(fd);
-    if (result != 0)
-        std::cerr << "Warning: /dev/urandom could not be closed properly. Continuing." << std::endl;
-   
-    std::string iv_str = (std::string)(iv);
-    std::ostringstream iv_hex_b;
-    for (unsigned int i = 0; i < 16; ++i)
-    {
-        unsigned char byte = iv[i];
-        unsigned char nybbles[2] = {0};
-        nybbles[0] = byte & 0xF;
-        nybbles[1] = (byte & 0xF0) >> 4;
-        iv_hex_b << std::hex << (unsigned int)nybbles[0] << (unsigned int)nybbles[1];
-         
-    }
-    std::string iv_hex = iv_hex_b.str();
-    init_state(iv_hex); 
-
-    int r = get_pt_line(pt);
-	while (r != -1)
-	{
-#ifdef DB_2
-		std::cerr << "(e) plaintext: " << export_state() << std::endl;
-#endif
-//		init_state(s);		
-		t = encrypt_line();
-#ifdef DB_2
-		std::cerr << "(e) ciphertext: " << export_state() << std::endl;
-#endif
-		for (unsigned int i = 0; i < 32; i+=2)
-			ct << (unsigned char)std::stoi(t.substr(i, 2), nullptr, 16);
-
-		r = get_pt_line(pt);
-	}
-
-	/* Append the number of padded bytes so we can strip off any padding during decryption */
-
-	state[0][0] ^= padded_bytes;
-#ifdef DB_2
-	std::cerr << "padding: " << export_state() << std::endl;
-#endif
-	t = encrypt_line();
-#ifdef DB_2
-	std::cerr << "(e) ciphertext: " << t << std::endl;
-#endif
-	for (unsigned int i = 0; i < 32; i+=2)
-		ct << (unsigned char)std::stoi(t.substr(i, 2), nullptr, 16);
-
-
-    /* Write out the initialization vector */
-    for (unsigned int i = 0; i < 32; i+=2)
-        ct << (unsigned char)std::stoi(iv_hex.substr(i, 2), nullptr, 16);
-
- 
-	/* If encrypting in place, remove the original, and rename the temporary file */
-	if (outFileName.compare("") == 0)
-	{
-		int i;
-		std::string cmd = "rm " + plaintextFileName;
-		i = system(cmd.c_str());
-		if (i) std::cerr << "Error: cmd '" << cmd << "' returned " << i << std::endl;	
-		cmd = "mv " + plaintextFileName + ".tmp " + plaintextFileName; 
-		i = system(cmd.c_str());
-		if (i) std::cerr << "Error: cmd '" << cmd << "' returned " << i << std::endl;	
-	}	
-	return;
-}
-
-void aes::decrypt(std::string keyFileName, std::string ciphertextFileName, std::string outFileName)
-{
-	std::ifstream k;
-	std::ifstream ct;	
-	std::fstream pt;	/* need RW to deal with padding */
-	std::string outputName = (outFileName.compare("") == 0 ? ciphertextFileName + ".tmp" : outFileName);
-	unsigned char c;	
-	k.open(keyFileName);
-	ct.open(ciphertextFileName);
-	pt.open("decrypt.tmp", std::fstream::out); /* placeholder */
-	std::string s;
-	k >> s;
-	init_key(s);
-	
-    /* Grab the initialization vector and decrypt the first block of ciphertext */
-    ct.seekg(-16, ct.end);
-	c = ct.get();
-	for (unsigned int i = 0; i < 16; ++i)
-	{
-		initialization_vector[i%4][i/4] = c;
-		c = ct.get();	
-	}
-	ct.unget();
-
-    /* Now the state of our system is set: the initialization vector is stored in
-     * the initialization_vector variable at the beginning of our first decryption 
-     * round. Before decryption of the block occurs, we store the ciphertext in a 
-     * temporary buffer (secondary_vector in aes.h) for use in subsequent rounds of 
-     * CBC-mode decryption. After decryption occurs in the current round, the data 
-     * stored in the IV variable is no longer needed, and so the secondary_vector 
-     * is swapped into the IV variable, and the cycle continues. */
-    ct.clear(); 
-    ct.seekg(0, ct.beg);
-    int r = get_ct_line(ct); 
-    while (r != -1)
-	{
-#ifdef DB_2
-		std::cerr << "(d) ciphertext: " << export_state() << std::endl;
-#endif
-		std::string t = decrypt_line();
-#ifdef DB_2
-		std::cerr << "(d) plaintext: " << t << std::endl;
-#endif
-
-        /* Now that we have decrypted, we should move the ciphertext from secondary
-         * buffer to the IV buffer. */
-        for (unsigned int i = 0; i < 4; ++i)
-            for (unsigned int j = 0; j < 4; ++j)
-                initialization_vector[i][j] = secondary_buffer[i][j];
-
-#ifdef DB_2
-        std::cerr << "(d) IV: " << std::hex << (unsigned char)initialization_vector[0][0] << std::endl;
-        std::cerr << "(d) 2ndary: " << std::hex << (unsigned char)secondary_buffer[0][0] << std::endl;
-        std::cerr << "t: " << t << std::endl;
-#endif
-
-		for (unsigned int i = 0; i < 32; i+=2)
-		{
-			c = (unsigned char)std::stoi(t.substr(i, 2), nullptr, 16);
-			pt << c; 	
+	for( idx = Nk; idx < Nb * (Nr + 1); idx++ ) {
+		tmp0 = expkey[4*idx - 4];
+		tmp1 = expkey[4*idx - 3];
+		tmp2 = expkey[4*idx - 2];
+		tmp3 = expkey[4*idx - 1];
+		if( !(idx % Nk) ) {
+			tmp4 = tmp3;
+			tmp3 = Sbox[tmp0];
+			tmp0 = Sbox[tmp1] ^ Rcon[idx/Nk];
+			tmp1 = Sbox[tmp2];
+			tmp2 = Sbox[tmp4];
+		} else if( Nk > 6 && idx % Nk == 4 ) {
+			tmp0 = Sbox[tmp0];
+			tmp1 = Sbox[tmp1];
+			tmp2 = Sbox[tmp2];
+			tmp3 = Sbox[tmp3];
 		}
-		r = get_ct_line(ct);
+
+		expkey[4*idx+0] = expkey[4*idx - 4*Nk + 0] ^ tmp0;
+		expkey[4*idx+1] = expkey[4*idx - 4*Nk + 1] ^ tmp1;
+		expkey[4*idx+2] = expkey[4*idx - 4*Nk + 2] ^ tmp2;
+		expkey[4*idx+3] = expkey[4*idx - 4*Nk + 3] ^ tmp3;
+	}
+}
+
+// encrypt one 128 bit block
+void aes::EncryptBlock (uchar *expkey)
+{
+uchar state[Nb * 4];
+unsigned round;
+
+	memcpy (state, in, Nb * 4);
+	AddRoundKey ((unsigned *)state, (unsigned *)expkey);
+
+	for( round = 1; round < Nr + 1; round++ ) {
+		if( round < Nr )
+			MixSubColumns ();
+		else
+			ShiftRows ();
+
+		AddRoundKey ((unsigned *)state, (unsigned *)expkey + round * Nb);
 	}
 
-	/* Need to determine if any padding was added */
-	pt.close();
-	std::ifstream dec;
-	dec.open("decrypt.tmp", std::fstream::in);
-	dec.seekg(-32, dec.end);
-    //TODO: is this right??!?!?!?!?!#*&#%$(*7
-    zero_state();
-	r = get_pt_line(dec);
-//	unsigned int num_bytes = std::stoi(s.substr(0, 2), nullptr, 16);
-	unsigned int num_bytes = state[0][0];
+	memcpy (out, state, sizeof(state));
+}
 
-#ifdef DB_2
-	std::cerr << "decrypt: found " << std::dec << num_bytes << " of padding" << std::endl;
-    std::cerr << "state is: " << export_state() << std::endl;
-#endif	
-	/* Get total length of file */
-	dec.clear();
-	dec.seekg(0, dec.end);
-	int len = dec.tellg();
-	dec.clear();
-	dec.seekg(0, dec.beg);
+void aes::DecryptBlock (uchar *expkey)
+{
+uchar state[Nb * 4];
+unsigned round;
 
-	/* Copy the decrypted file without the padding */
-	std::ofstream dec_tmp;
-	dec_tmp.open(outputName);
-	c = dec.get();
-    // Note the second 16 below refers to the initialization vector appended to the file as well
-	for (unsigned int i = 0; i < len - ((16 + num_bytes) + 16); ++i)
+	memcpy (state, in, sizeof(state));
+
+	AddRoundKey ((unsigned *)state, (unsigned *)expkey + Nr * Nb);
+	InvShiftRows();
+
+	for( round = Nr; round--; )
 	{
-		dec_tmp.put(c);
-		c = dec.get();
+		AddRoundKey ((unsigned *)state, (unsigned *)expkey + round * Nb);
+		if( round )
+			InvMixSubColumns ();
+	} 
+
+	memcpy (out, state, sizeof(state));
+}
+
+/*
+#include <stdio.h>
+#include <fcntl.h>
+uchar in[16] = { 0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff};
+
+uchar key[] = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f};
+
+uchar out[16];
+
+#ifndef unix
+void rd_clock (__int64 *ans)
+{
+unsigned dwLow, dwHigh;
+
+	__asm {
+		rdtsc
+		mov dwLow, eax
+		mov dwHigh, edx
 	}
-	
-	int i;
-	std::string cmd; 
-	/* If we are decrypting in place, remove the original and rename the tmp file */	
-	if (outFileName.compare("") == 0)
-	{	
-		cmd = "rm " + ciphertextFileName;
-		i = system(cmd.c_str());
-		if (i) std::cerr << "Error: cmd '" << cmd << "' returned " << i << std::endl;	
-		cmd = "mv " + outputName + " " + ciphertextFileName; 
-		i = system(cmd.c_str()); //TODO: change pls		
-		if (i) std::cerr << "Error: cmd '" << cmd << "' returned " << i << std::endl;	
+	*ans = (__int64)dwHigh << 32 | (__int64)dwLow;
+}
+#else
+typedef long long __int64;
+
+void rd_clock (__int64 *ans)
+{
+unsigned long long dwBoth;
+
+	__asm__ volatile(".byte 0x0f, 0x31" : "=A"(dwBoth)); 
+	*ans = dwBoth;
+}
+#endif
+
+uchar samplekey[] = {0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6, 0xab,
+0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c};
+
+uchar samplein[] = {0x32, 0x43, 0xf6, 0xa8, 0x88, 0x5a, 0x30, 0x8d, 0x31,
+0x31, 0x98, 0xa2, 0xe0, 0x37, 0x07, 0x34};
+
+void sample ()
+{
+uchar expkey[4 * Nb * (Nr + 1)];
+unsigned idx, diff;
+__int64 start, stop;
+
+	ExpandKey (samplekey, expkey);
+	Encrypt (samplein, expkey, out);
+
+	rd_clock(&start);
+
+	Encrypt (samplein, expkey, out);
+
+	rd_clock(&stop);
+	diff = stop - start;
+	printf ("encrypt time: %d, %d cycles per byte\n", diff, diff/16);
+
+	for( idx = 0; idx < 16; idx++ )
+		printf ("%.2x ", out[idx]);
+
+	printf ("\n");
+	Decrypt (out, expkey, in);
+	rd_clock(&start);
+	Decrypt (out, expkey, in);
+
+	rd_clock(&stop);
+	diff = stop - start;
+	printf ("decrypt time: %d, %d cycles per byte\n", diff, diff/16);
+
+	for( idx = 0; idx < 16; idx++ )
+		printf ("%.2x ", in[idx]);
+
+	printf ("\n");
+}
+
+
+void certify ()
+{
+uchar expkey[4 * Nb * (Nr + 1)];
+unsigned idx, diff;
+__int64 start, stop;
+
+	ExpandKey (key, expkey);
+	Encrypt (in, expkey, out);
+
+	rd_clock(&start);
+
+	Encrypt (in, expkey, out);
+
+	rd_clock(&stop);
+	diff = stop - start;
+	printf ("encrypt time: %d, %d cycles per byte\n", diff, diff/16);
+
+	for( idx = 0; idx < 16; idx++ )
+		printf ("%.2x ", out[idx]);
+
+	printf ("\n");
+	Decrypt (out, expkey, in);
+	rd_clock(&start);
+	Decrypt (out, expkey, in);
+
+	rd_clock(&stop);
+	diff = stop - start;
+	printf ("decrypt time: %d, %d cycles per byte\n", diff, diff/16);
+
+	for( idx = 0; idx < 16; idx++ )
+		printf ("%.2x ", in[idx]);
+
+	printf ("\n");
+}
+*/
+
+void aes::decrypt (char *mykey, char *name)
+{
+uchar expkey[4 * Nb * (Nr + 1)];
+FILE *fd = fopen (name, "rb");
+const char of_name[] = "out.tmp";
+FILE *of = fopen (of_name, "wb");
+int ch, idx = 0;
+
+	strncpy ((char *)key, mykey, sizeof(key));
+	ExpandKey (key, expkey);
+
+  //get padding metadata
+  int p = fseek(fd, -16, SEEK_END);
+  padding_bytes = getc(fd);
+  std::cerr << "read padding as " << padding_bytes << std::endl;
+  fseek(fd, 0, SEEK_END);
+  unsigned long long end = ftell(fd);
+  std::cerr << "end is: " << end << std::endl;
+  rewind(fd);
+  unsigned long long int counter = 0; 
+	while( ch = getc(fd), ch != EOF ) {
+		in[idx++] = ch;
+		if( idx % 16 )
+			continue;
+
+		DecryptBlock (expkey);
+
+		for( idx = 0; idx < 16; idx++ )
+			fputc (out[idx], of);
+		idx = 0;
 	}
 
-	/* remove original tmp file */
-	cmd = "rm decrypt.tmp";
-	i = system(cmd.c_str());
-	if (i) std::cerr << "Error: cmd '" << cmd << "' returned " << i << std::endl;	
-		
-	return;			
-}
+  fclose(fd);
+  unsigned long long int amt = end - (padding_bytes + 16);
+  std::cerr << "amt to trunc: " << amt << std::endl;
+  fclose(of); 
+  std::string cmd = "truncate -s " + std::to_string(end-(padding_bytes+16)) + " " + of_name;
+  system(cmd.c_str());
 
-
-void aes::InvSubBytes()
-{
-	for (unsigned int i = 0; i < 4; ++i)
-		for (unsigned int j = 0; j < 4; ++j)
-			state[i][j] = InvSbox[state[i][j]];
-}
-
-void aes::InvShiftRows()
-{
-	unsigned char *r1 = state[1];
-	unsigned char *r2 = state[2];
-	unsigned char *r3 = state[3];
-
-	/* Rotate the 2nd row (state[1]) by 1 (left) */
-	unsigned char c1 = r1[3];
-	r1[3] = r1[2];
-	r1[2] = r1[1];
-	r1[1] = r1[0];
-	r1[0] = c1;
-
-/* Rotate 3rd row (state[2]) by 2 */
-	c1 = r2[0];
-	unsigned char c2 = r2[1];
-	r2[0] = r2[2];
-	r2[1] = r2[3];
-	r2[2] = c1;
-	r2[3] = c2;
-
-	/* Rotate 4th row (state[3]) by 3 */
-	c1 = r3[0];
-	r3[0] = r3[1];
-	r3[1] = r3[2];
-	r3[2] = r3[3];
-	r3[3] = c1;
 
 }
 
-void aes::InvMixColumns()
+void aes::encrypt (char *mykey, char *name)
 {
-	for (unsigned int i = 0; i < 4; ++i)
-		InvMixHelper(i);
-}
+uchar expkey[4 * Nb * (Nr + 1)];
+FILE *fd = fopen (name, "rb");
+int ch, idx = 0;
 
-void aes::InvMixHelper(unsigned int c)
-{
-	unsigned char a[4];
+	strncpy ((char *)key, mykey, sizeof(key));
+	ExpandKey (key, expkey);
 
-  // note that a is just a copy of st[.][c]
-  for (unsigned int i = 0; i < 4; i++)
-      a[i] = state[i][c];
+	while( ch = getc(fd), ch != EOF ) {
+		in[idx++] = ch;
+		if( idx % 16 )
+			continue;
 
-	state[0][c] = (unsigned char)(gmul(0xE,a[0]) ^ gmul(0xB,a[1]) ^ gmul(0xD, a[2]) ^ gmul(0x9,a[3]));
-	state[1][c] = (unsigned char)(gmul(0xE,a[1]) ^ gmul(0xB,a[2]) ^ gmul(0xD, a[3]) ^ gmul(0x9,a[0]));
-	state[2][c] = (unsigned char)(gmul(0xE,a[2]) ^ gmul(0xB,a[3]) ^ gmul(0xD, a[0]) ^ gmul(0x9,a[1]));
-	state[3][c] = (unsigned char)(gmul(0xE,a[3]) ^ gmul(0xB,a[0]) ^ gmul(0xD, a[1]) ^ gmul(0x9,a[2]));
+		EncryptBlock (expkey);
+
+		for( idx = 0; idx < 16; idx++ )
+			putchar (out[idx]);
+		idx = 0;
+	}
+
+	if( idx ){
+    padding_bytes = 16 - idx;
+    std::cerr << "idx is " << idx << " and padding is " << padding_bytes << std::endl;
+	  while( idx % 16 )
+	    in[idx++] = 0;
+    }
+	else
+	  return;
+
+	EncryptBlock (expkey);
+
+	for( idx = 0; idx < 16; idx++ )
+		putchar (out[idx]);
+
+  //padding metadata
+  state[0] = padding_bytes;
+  for (idx = 1; idx < 16; ++idx)
+    state[idx] ^= state[idx];
  
+ // EncryptBlock (expkey); 
+
+	for( idx = 0; idx < 16; ++idx)
+		putchar (state[idx]);
+
+
 }
 
+/*
+uchar expkey[4 * Nb * (Nr + 1)];
+void mrandom (int, char *);
+unsigned xrandom (void);
 
-void aes::AddRoundKey(unsigned int index)
+int aescycles ()
 {
-	unsigned int cols[4];
-	for (unsigned int i = 0, j = index; i < 4; ++i, ++j)
-		cols[i] = column_from_key_schedule(j);
+__int64 start, end;
+int t;
 
-	for (unsigned int j = 0; j < 4; ++j)
-	{
-		unsigned int w = cols[j];
-		for (unsigned int i=0; i < 4; ++i)
-			state[j][i] ^= ((w >> (24 - (i * 8))) & 0xFF);
+	do {
+		rd_clock(&start);
+		Encrypt (in, expkey, out);
+		rd_clock (&end);
+		t = end - start;
+	} while( t<= 0 || t>= 4000);
+	return t;
+}
+
+int bestx (int b, int loops)
+{
+int bestx = 0, bestxt = 0;
+int x, xt, i, j;
+
+	for( x = 0; x < 256; x++ ) {
+		xt = 0;
+		for( i = 0; i < loops; i++ ) {
+			for( j = 0; j < 16; j++ )
+				in[j] = xrandom() >> 16;
+			in[b] = x;
+			xt += aescycles(); xt += aescycles(); xt += aescycles();
+			xt += aescycles(); xt += aescycles();
+		}
+		if( xt > bestxt )
+			bestx = x, bestxt = xt;
+	}
+	return bestx;
+}
+
+void bernstein (char *seed)
+{
+int loops, b, j, k;
+
+	mrandom (strlen(seed), seed);
+
+	for( loops = 4; loops <= 65536; loops *= 16) {
+		for( b = 0; b < 16; b++ ) {
+			printf ("%.2d, %.5d loops:", b, loops);
+			for( k = 0; k < 10; k++ ) {
+				for( j = 0; j < 16; j++ )
+					key[j] = xrandom() >> 16;
+				ExpandKey (key, expkey);
+				printf (" %.2x", bestx (b, loops) ^ key[b]);
+				fflush (stdout);
+			}
+			printf ("\n");
+		}
 	}
 }
 
-
-/***** Utilities *****/
-unsigned int aes::column_from_key_schedule(unsigned int i)
+void tables()
 {
-	unsigned int i1 = (i / 4) * 4; /* Index of 1st word in array that contains column */
-	unsigned int i2 = 24 - ((i % 4) * 8); /* Amount to shift each word to get desired byte */
-	unsigned int b1 = (key_schedule[i1] >> i2) & 0xFF;
-	unsigned int b2 = (key_schedule[i1+1] >> i2) & 0xFF;
-	unsigned int b3 = (key_schedule[i1+2] >> i2) & 0xFF;
-	unsigned int b4 = (key_schedule[i1+3] >> i2) & 0xFF;
-	return (b1 << 24) | (b2 << 16) | (b3 << 8) | b4; 
-}
+int i;
 
-/***** Debugging *****/
-void aes::print_expanded_key()
-{
-
-	for (unsigned int i = 0; i < sizeof(key_schedule)/sizeof(key_schedule[0]); ++i)
-		std::cout << std::setfill('0') << std::setw(8) << std::setbase(16) <<  \
-			column_from_key_schedule(i) << " ";
-	std::cout << std::endl;	
-}
-
-void aes::print_state(std::ostream& o)
-{
-	for (unsigned int i = 0; i < 4; ++i)
-		for (unsigned int j = 0; j < 4; ++j)
-			o << std::setfill('0') << std::setw(2) << std::hex << (unsigned int)state[j][i];
-	
-	o << std::endl;	
-}
-
-std::string aes::export_state()
-{
-	std::ostringstream o;
-	for (unsigned int i = 0; i < 4; ++i)
-		for (unsigned int j = 0; j < 4; ++j)
-			o << std::setfill('0') << std::setw(2) << std::hex << (unsigned int)state[j][i];
-	return o.str();		
-}
-
-
-int aes::get_pt_line(std::ifstream& file)
-{
-	if (file.eof()) return -1;
-
-//	std::stringstream s;
-	unsigned char c;
-	c = file.get();
-	for (unsigned int i = 0; i < 16; ++i)
+	for( i = 0; i < 256; i++)
 	{
-	//	s << std::hex << ((c & 0xF0) >> 4) << (c & 0xF);
-		state[i%4][i/4] ^= c; // CBC mode
-		c = file.get();	
-		if (file.eof())
-		{
-			padded_bytes = 16 - (i + 1);
-			for (unsigned int j = i+1; j < 16; ++j)
-				state[j%4][j/4] = 0;
-	//			s << "00";
-				
-#ifdef DEBUG
-			std::cerr << "last line: get_line getting: " << export_state() << std::endl;	
-#endif	
-			return 0;	
-		}	
+		printf("0x%.2x, ", Sbox[i] ^ Xtime2[Sbox[i]]);
+		if( !((i+1) % 16) )
+			printf("\n");
 	}
-	file.unget();
-#ifdef DEBUG
-	std::cerr << "get_line getting: " << export_state() << std::endl;	
+
+	printf("\n");
+
+	for( i = 0; i < 256; i++)
+	{
+		printf("0x%.2x, ", Xtime2[Sbox[i]]);
+		if ( !((i+1) % 16) )
+			printf("\n");
+	}
+}
+*/
+
+int main (int argc, char *argv[])
+{
+/*
+#ifndef unix
+extern int __cdecl _setmode (int, int);
+
+	_setmode (_fileno(stdout), _O_BINARY);
 #endif
-
-	return 0;
-}
-
-
-int aes::get_ct_line(std::ifstream& file)
-{
-	if (file.eof()) return -1;
-
-//	std::stringstream s;
-	unsigned char c;
-	c = file.get();
-	for (unsigned int i = 0; i < 16; ++i)
-	{
-	//	s << std::hex << ((c & 0xF0) >> 4) << (c & 0xF);
-		state[i%4][i/4] = c; 
-        secondary_buffer[i%4][i/4] = c; // copy to secondary storage
-		c = file.get();	
-		if (file.eof())
-		{
-			padded_bytes = 16 - (i + 1);
-			for (unsigned int j = i+1; j < 16; ++j)
-				state[j%4][j/4] = 0;
-	//			s << "00";
-				
-#ifdef DEBUG
-			std::cerr << "last line: get_ct_line getting: " << export_state() << std::endl;	
-#endif	
-			return 0;	
-		}	
+*/   
+    aes driver;
+	switch( argv[1][0] ) {
+//	case 'c': certify(); break;
+	case 'e': driver.encrypt(argv[2], argv[3]); break;
+	case 'd': driver.decrypt(argv[2], argv[3]); break;
+//	case 'b': bernstein(argv[2]);	break;
+//	case 's': sample(); break;
+//	case 't': tables(); break;
 	}
-	file.unget();
-#ifdef DEBUG
-	std::cerr << "get_ct_line getting: " << export_state() << std::endl;	
-#endif
-
-	return 0;
 }
 
-
-void aes::zero_state()
-{
-	for (unsigned int i = 0; i < 4; ++i)
-		for (unsigned int j = 0; j < 4; ++j)
-			state[i][j] ^= state[i][j];
-}
